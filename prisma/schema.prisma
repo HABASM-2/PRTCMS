@@ -28,37 +28,44 @@ model User {
   email    String @unique
   username String @unique
   password String
-  role     String
+
+  roleId       Int? // role is optional
+  role         Role?  @relation(fields: [roleId], references: [id])
+  createdById  Int?
+  createdBy    User?  @relation("CreatedUsers", fields: [createdById], references: [id])
+  createdUsers User[] @relation("CreatedUsers")
 
   organisations Organisation[] @relation("UserOrganisations")
   Organisation  Organisation[] @relation("CreatedBy")
   ActivityLog   ActivityLog[]
   SessionLogs   SessionLog[] // ← NEW
   createdAt     DateTime       @default(now())
+  UserOrgUnit   UserOrgUnit[]
+}
+
+model ActivityLog {
+  id             Int          @id @default(autoincrement())
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisationId Int
+  action         String
+  reason         String?
+  performedBy    User         @relation(fields: [performedById], references: [id])
+  performedById  Int
+  createdAt      DateTime     @default(now())
 }
 
 model OrgUnit {
   id             Int          @id @default(autoincrement())
   name           String
   tag            String?
-  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   organisationId Int
 
-  parent    OrgUnit?  @relation("ParentChild", fields: [parentId], references: [id])
-  parentId  Int?
-  children  OrgUnit[] @relation("ParentChild")
-  createdAt DateTime  @default(now())
-}
-
-model ActivityLog {
-  id             Int          @id @default(autoincrement())
-  organisation   Organisation @relation(fields: [organisationId], references: [id])
-  organisationId Int
-  action         String // "activated", "deactivated", "created", etc.
-  reason         String?
-  performedBy    User         @relation(fields: [performedById], references: [id])
-  performedById  Int
-  createdAt      DateTime     @default(now())
+  parent      OrgUnit?      @relation("ParentChild", fields: [parentId], references: [id])
+  parentId    Int?
+  children    OrgUnit[]     @relation("ParentChild")
+  createdAt   DateTime      @default(now())
+  UserOrgUnit UserOrgUnit[]
 }
 
 model SessionLog {
@@ -69,4 +76,23 @@ model SessionLog {
   userAgent String? // Optional: browser info
   loginAt   DateTime  @default(now())
   logoutAt  DateTime? // Optional: null if not logged out yet
+}
+
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+model UserOrgUnit {
+  userId    Int
+  orgUnitId Int
+
+  user    User    @relation(fields: [userId], references: [id])
+  orgUnit OrgUnit @relation(fields: [orgUnitId], references: [id])
+
+  assignedAt DateTime @default(now())
+
+  @@id([userId, orgUnitId])
 }

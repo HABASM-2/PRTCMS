@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Pencil, Trash2, Save, X, History } from "lucide-react";
+import { Pencil, Trash2, Save, X, History, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,8 @@ export default function AddOrganisation() {
   const [statusReason, setStatusReason] = useState("");
   const [statusLoading, setStatusLoading] = useState(false);
 
+  const [deleteLoadingId, setDeleteLoadingId] = useState<number | null>(null);
+
   const pageSize = 5;
 
   const fetchData = async () => {
@@ -103,6 +105,7 @@ export default function AddOrganisation() {
     setDescription("");
     setLoading(false);
     fetchData();
+    toast.success("Organisation created successfully");
   };
 
   const startEditing = (org: Org) => {
@@ -127,14 +130,32 @@ export default function AddOrganisation() {
     setEditLoading(false);
     cancelEditing();
     fetchData();
+    toast.success("Organisation updated");
   };
 
   const deleteOrg = async (id: number) => {
-    await fetch(`/api/organisations/${id}`, {
-      method: "DELETE",
-    });
-    setConfirmDeleteId(null);
-    fetchData();
+    setDeleteLoadingId(id); // Start spinner
+
+    try {
+      const res = await fetch(`/api/organisations/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || "Failed to delete organisation.");
+        return;
+      }
+
+      toast.success("Organisation deleted");
+      fetchData();
+    } catch (err) {
+      toast.error("Something went wrong while deleting.");
+    } finally {
+      setConfirmDeleteId(null);
+      setDeleteLoadingId(null); // Stop spinner
+    }
   };
 
   const handleStatusChange = (org: Org) => {
@@ -159,10 +180,10 @@ export default function AddOrganisation() {
     setStatusLoading(false);
     setStatusDialog({ org: null, open: false });
     fetchData();
+    toast.success("Status updated");
   };
 
   const showHistory = (org: Org) => {
-    console.log("History clicked for org:", org.status); // 🔍
     toast(
       `${org.name} was created at ${new Date(
         org.createdAt
@@ -172,7 +193,6 @@ export default function AddOrganisation() {
 
   return (
     <div className="space-y-6">
-      {/* Create Form */}
       <div className="space-y-2">
         <Input
           placeholder="Organisation Name"
@@ -186,13 +206,16 @@ export default function AddOrganisation() {
         />
         <div className="flex gap-4 items-center">
           <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? "Adding..." : "Add Organisation"}
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Add Organisation"
+            )}
           </Button>
           {error && <span className="text-red-500 text-sm">{error}</span>}
         </div>
       </div>
 
-      {/* Search */}
       <Input
         className="mt-6"
         placeholder="Search organisation..."
@@ -203,7 +226,6 @@ export default function AddOrganisation() {
         }}
       />
 
-      {/* Table */}
       <Table>
         <TableHeader>
           <TableRow>
@@ -214,130 +236,133 @@ export default function AddOrganisation() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tableLoading
-            ? [...Array(5)].map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={4}>
-                    <div className="flex justify-center py-10">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900 dark:border-white" />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            : orgs.map((org) => (
-                <TableRow key={org.id}>
-                  <TableCell>
-                    {editingId === org.id ? (
-                      <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                      />
+          {tableLoading ? (
+            <TableRow>
+              <TableCell colSpan={4}>
+                <div className="flex justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : (
+            orgs.map((org) => (
+              <TableRow key={org.id}>
+                <TableCell>
+                  {editingId === org.id ? (
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                    />
+                  ) : (
+                    org.name
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingId === org.id ? (
+                    <Textarea
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                    />
+                  ) : (
+                    org.description
+                  )}
+                </TableCell>
+                <TableCell>{org.createdBy?.fullName || "Unknown"}</TableCell>
+                <TableCell className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => showHistory(org)}
+                  >
+                    <History className="w-4 h-4" />
+                  </Button>
+                  {String(session?.user?.id) === String(org.createdBy?.id) &&
+                    (editingId === org.id ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => saveEdit(org.id)}
+                          disabled={editLoading}
+                        >
+                          {editLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Save className="w-4 h-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={cancelEditing}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </>
                     ) : (
-                      org.name
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {editingId === org.id ? (
-                      <Textarea
-                        value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
-                      />
-                    ) : (
-                      org.description
-                    )}
-                  </TableCell>
-                  <TableCell>{org.createdBy?.fullName || "Unknown"}</TableCell>
-                  <TableCell className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => showHistory(org)}
-                    >
-                      <History className="w-4 h-4" />
-                    </Button>
-                    {String(session?.user?.id) === String(org.createdBy?.id) &&
-                      (editingId === org.id ? (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => saveEdit(org.id)}
-                            disabled={editLoading}
-                          >
-                            {editLoading ? (
-                              <span className="text-xs">...</span>
-                            ) : (
-                              <Save className="w-4 h-4" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={cancelEditing}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => startEditing(org)}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Dialog
-                            open={confirmDeleteId === org.id}
-                            onOpenChange={(open) =>
-                              !open && setConfirmDeleteId(null)
-                            }
-                          >
-                            <DialogTrigger asChild>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => startEditing(org)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Dialog
+                          open={confirmDeleteId === org.id}
+                          onOpenChange={(open) =>
+                            !open && setConfirmDeleteId(null)
+                          }
+                        >
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setConfirmDeleteId(org.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="space-y-4">
+                            <DialogTitle>Confirm Delete</DialogTitle>
+                            <p>
+                              Are you sure you want to delete{" "}
+                              <strong>{org.name}</strong>?
+                            </p>
+                            <div className="flex justify-end gap-2">
                               <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setConfirmDeleteId(org.id)}
+                                variant="outline"
+                                onClick={() => setConfirmDeleteId(null)}
                               >
-                                <Trash2 className="w-4 h-4 text-red-500" />
+                                Cancel
                               </Button>
-                            </DialogTrigger>
-                            <DialogContent className="space-y-4">
-                              <DialogTitle>Confirm Delete</DialogTitle>
-                              <p>
-                                Are you sure you want to delete{" "}
-                                <strong>{org.name}</strong>?
-                              </p>
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setConfirmDeleteId(null)}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  onClick={() => deleteOrg(org.id)}
-                                >
-                                  Confirm Delete
-                                </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleStatusChange(org)}
-                          >
-                            {org.status === "active"
-                              ? "Deactivate"
-                              : "Activate"}
-                          </Button>
-                        </>
-                      ))}
-                  </TableCell>
-                </TableRow>
-              ))}
+                              <Button
+                                variant="destructive"
+                                onClick={() => deleteOrg(org.id)}
+                                disabled={deleteLoadingId === org.id}
+                              >
+                                {deleteLoadingId === org.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  "Confirm Delete"
+                                )}
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleStatusChange(org)}
+                        >
+                          {org.status === "active" ? "Deactivate" : "Activate"}
+                        </Button>
+                      </>
+                    ))}
+                </TableCell>
+              </TableRow>
+            ))
+          )}
         </TableBody>
       </Table>
 
@@ -366,13 +391,16 @@ export default function AddOrganisation() {
               Cancel
             </Button>
             <Button onClick={confirmStatusChange} disabled={statusLoading}>
-              {statusLoading ? "Updating..." : "Confirm"}
+              {statusLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Confirm"
+              )}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Pagination */}
       <div className="flex justify-between items-center mt-4">
         <Button
           variant="outline"
