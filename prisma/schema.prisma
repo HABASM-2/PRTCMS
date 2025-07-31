@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   // output   = "../app/generated/prisma"
@@ -14,22 +8,65 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organisation {
+  id           Int           @id @default(autoincrement())
+  name         String
+  description  String?
+  status       String        @default("active")
+  createdBy    User          @relation("CreatedBy", fields: [createdById], references: [id])
+  createdById  Int
+  orgUnits     OrgUnit[]
+  createdAt    DateTime      @default(now())
+  activityLogs ActivityLog[]
+
+  users User[] @relation("UserOrganisations") // ← this is the missing field
+}
+
 model User {
-  id            Int            @id @default(autoincrement())
-  fullName      String
-  email         String         @unique
-  username      String         @unique
-  password      String
-  role          String
-  organisations Organisation[] @relation("CreatedBy")
+  id       Int    @id @default(autoincrement())
+  fullName String
+  email    String @unique
+  username String @unique
+  password String
+  role     String
+
+  organisations Organisation[] @relation("UserOrganisations")
+  Organisation  Organisation[] @relation("CreatedBy")
+  ActivityLog   ActivityLog[]
+  SessionLogs   SessionLog[] // ← NEW
   createdAt     DateTime       @default(now())
 }
 
-model Organisation {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
-  createdBy   Int
-  creator     User     @relation("CreatedBy", fields: [createdBy], references: [id])
+model OrgUnit {
+  id             Int          @id @default(autoincrement())
+  name           String
+  tag            String?
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  organisationId Int
+
+  parent    OrgUnit?  @relation("ParentChild", fields: [parentId], references: [id])
+  parentId  Int?
+  children  OrgUnit[] @relation("ParentChild")
+  createdAt DateTime  @default(now())
+}
+
+model ActivityLog {
+  id             Int          @id @default(autoincrement())
+  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  organisationId Int
+  action         String // "activated", "deactivated", "created", etc.
+  reason         String?
+  performedBy    User         @relation(fields: [performedById], references: [id])
+  performedById  Int
+  createdAt      DateTime     @default(now())
+}
+
+model SessionLog {
+  id        Int       @id @default(autoincrement())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    Int
+  ipAddress String? // Optional: log IP if available
+  userAgent String? // Optional: browser info
+  loginAt   DateTime  @default(now())
+  logoutAt  DateTime? // Optional: null if not logged out yet
 }

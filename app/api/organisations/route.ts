@@ -23,7 +23,9 @@ export async function POST(req: Request) {
     data: {
       name,
       description,
-      createdBy: Number(session.user.id),
+      createdBy: {
+        connect: { id: Number(session.user.id) },
+      },
     },
   });
 
@@ -46,7 +48,7 @@ export async function GET(req: Request) {
         name: { contains: query, mode: "insensitive" },
       },
       include: {
-        creator: {
+        createdBy: {
           select: { fullName: true, id: true },
         },
       },

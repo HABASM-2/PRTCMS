@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Pencil, Trash2, Save, X } from "lucide-react";
+import { Pencil, Trash2, Save, X, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,15 +20,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 
 type Org = {
   id: number;
   name: string;
   description?: string;
+  status: "active" | "inactive";
   createdAt: string;
-  createdBy: string;
-  creator?: {
-    id: string;
+  createdBy: {
+    id: string | number;
     fullName?: string | null;
   };
 };
@@ -53,6 +54,13 @@ export default function AddOrganisation() {
   const [editLoading, setEditLoading] = useState(false);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  const [statusDialog, setStatusDialog] = useState<{
+    org: Org | null;
+    open: boolean;
+  }>({ org: null, open: false });
+  const [statusReason, setStatusReason] = useState("");
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const pageSize = 5;
 
@@ -84,9 +92,9 @@ export default function AddOrganisation() {
       headers: { "Content-Type": "application/json" },
     });
 
+    const data = await res.json();
     if (!res.ok) {
-      const errorData = await res.json();
-      setError(errorData.error || "Something went wrong");
+      setError(data.error || "Something went wrong");
       setLoading(false);
       return;
     }
@@ -113,10 +121,7 @@ export default function AddOrganisation() {
     setEditLoading(true);
     await fetch(`/api/organisations/${id}`, {
       method: "PUT",
-      body: JSON.stringify({
-        name: editName,
-        description: editDescription,
-      }),
+      body: JSON.stringify({ name: editName, description: editDescription }),
       headers: { "Content-Type": "application/json" },
     });
     setEditLoading(false);
@@ -130,6 +135,39 @@ export default function AddOrganisation() {
     });
     setConfirmDeleteId(null);
     fetchData();
+  };
+
+  const handleStatusChange = (org: Org) => {
+    setStatusReason("");
+    setStatusDialog({ org, open: true });
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusReason.trim() || !statusDialog.org) return;
+
+    setStatusLoading(true);
+
+    await fetch(`/api/organisations/${statusDialog.org.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newStatus: statusDialog.org.status === "active" ? "inactive" : "active",
+        reason: statusReason,
+      }),
+    });
+
+    setStatusLoading(false);
+    setStatusDialog({ org: null, open: false });
+    fetchData();
+  };
+
+  const showHistory = (org: Org) => {
+    console.log("History clicked for org:", org.status); // 🔍
+    toast(
+      `${org.name} was created at ${new Date(
+        org.createdAt
+      ).toLocaleString()} and is currently ${org.status}`
+    );
   };
 
   return (
@@ -208,9 +246,16 @@ export default function AddOrganisation() {
                       org.description
                     )}
                   </TableCell>
-                  <TableCell>{org.creator?.fullName || "Unknown"}</TableCell>
+                  <TableCell>{org.createdBy?.fullName || "Unknown"}</TableCell>
                   <TableCell className="flex gap-2">
-                    {String(session?.user?.id) === String(org.creator?.id) &&
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => showHistory(org)}
+                    >
+                      <History className="w-4 h-4" />
+                    </Button>
+                    {String(session?.user?.id) === String(org.createdBy?.id) &&
                       (editingId === org.id ? (
                         <>
                           <Button
@@ -242,7 +287,6 @@ export default function AddOrganisation() {
                           >
                             <Pencil className="w-4 h-4" />
                           </Button>
-
                           <Dialog
                             open={confirmDeleteId === org.id}
                             onOpenChange={(open) =>
@@ -259,8 +303,7 @@ export default function AddOrganisation() {
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="space-y-4">
-                              <DialogTitle>Confirm Delete</DialogTitle>{" "}
-                              {/* ✅ REQUIRED for accessibility */}
+                              <DialogTitle>Confirm Delete</DialogTitle>
                               <p>
                                 Are you sure you want to delete{" "}
                                 <strong>{org.name}</strong>?
@@ -281,6 +324,15 @@ export default function AddOrganisation() {
                               </div>
                             </DialogContent>
                           </Dialog>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleStatusChange(org)}
+                          >
+                            {org.status === "active"
+                              ? "Deactivate"
+                              : "Activate"}
+                          </Button>
                         </>
                       ))}
                   </TableCell>
@@ -288,6 +340,37 @@ export default function AddOrganisation() {
               ))}
         </TableBody>
       </Table>
+
+      <Dialog
+        open={statusDialog.open}
+        onOpenChange={(open) =>
+          !open && setStatusDialog({ org: null, open: false })
+        }
+      >
+        <DialogContent className="space-y-4">
+          <DialogTitle>Change Status</DialogTitle>
+          <p>
+            Provide a reason for changing status of{" "}
+            <strong>{statusDialog.org?.name}</strong>
+          </p>
+          <Textarea
+            placeholder="Reason..."
+            value={statusReason}
+            onChange={(e) => setStatusReason(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setStatusDialog({ org: null, open: false })}
+            >
+              Cancel
+            </Button>
+            <Button onClick={confirmStatusChange} disabled={statusLoading}>
+              {statusLoading ? "Updating..." : "Confirm"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Pagination */}
       <div className="flex justify-between items-center mt-4">

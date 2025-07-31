@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building, User as UserIcon } from "lucide-react";
 import { useState } from "react";
 import AddOrganisation from "./components/AddOrganisation";
+import OrgStructureEditor from "./components/OrgStructureEditor";
 
 export default function Page() {
   const [orgTab, setOrgTab] = useState("add");
@@ -44,7 +45,7 @@ export default function Page() {
                   Organisation Structure
                 </h2>
                 {/* Tree structure or layout here */}
-                <p>Display the organisation's structure here.</p>
+                <OrgStructureEditor />
               </div>
             </TabsContent>
           </Tabs>

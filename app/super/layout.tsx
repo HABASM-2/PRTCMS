@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/Logout";
 import { SuperNavDesktop } from "./components/SuperNavDesktop";
 import { SuperNavMobile } from "./components/SuperNavMobile";
+import { Toaster } from "sonner";
 
 import {
   DropdownMenu,
@@ -112,7 +113,10 @@ export default async function SuperLayout({ children }: Props) {
       <SuperNavMobile />
 
       {/* Main Content */}
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex-1 p-6">
+        {children}
+        <Toaster richColors /> {/* 👈 Required for toasts to show */}
+      </main>
     </div>
   );
 }
