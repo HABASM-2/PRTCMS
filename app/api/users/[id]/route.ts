@@ -1,36 +1,59 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs"; // ← import bcrypt
 
-// Edit user
 export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const userId = Number(params.id);
   const body = await req.json();
+
   const {
     fullName,
     username,
     email,
     password,
-    roleId,
-    organisationId,
+    roleIds,
+    organisationIds,
     orgUnitIds,
   } = body;
 
   try {
-    // Update main user fields
+    let hashedPassword: string | undefined = undefined;
+
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10); // ← hash the password
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         fullName,
         username,
         email,
-        password,
-        roleId: roleId || null,
-        organisationId,
-        orgUnits: {
-          set: orgUnitIds?.map((id: number) => ({ id })) || [],
+        ...(hashedPassword && { password: hashedPassword }), // ← set only if present
+
+        roles: {
+          set: roleIds?.map((id: number) => ({ id })) ?? [],
+        },
+
+        organisations: {
+          set: organisationIds?.map((id: number) => ({ id })) ?? [],
+        },
+
+        UserOrgUnit: {
+          deleteMany: {},
+          create: orgUnitIds?.map((orgUnitId: number) => ({
+            orgUnit: { connect: { id: orgUnitId } },
+          })) ?? [],
+        },
+      },
+      include: {
+        roles: true,
+        organisations: true,
+        UserOrgUnit: {
+          include: { orgUnit: true },
         },
       },
     });
@@ -53,6 +76,12 @@ export async function DELETE(
   const userId = Number(params.id);
 
   try {
+    // First delete user-related org units
+    await prisma.userOrgUnit.deleteMany({
+      where: { userId },
+    });
+
+    // Then delete the user
     await prisma.user.delete({
       where: { id: userId },
     });

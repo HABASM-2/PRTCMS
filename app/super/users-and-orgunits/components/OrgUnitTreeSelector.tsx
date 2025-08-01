@@ -85,6 +85,7 @@ export default function OrgUnitTreeSelector({
               <Button
                 variant="ghost"
                 size="icon"
+                type="button"
                 onClick={() => toggleExpand(unit.id)}
               >
                 {isOpen ? (

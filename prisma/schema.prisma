@@ -29,8 +29,9 @@ model User {
   username String @unique
   password String
 
-  roleId       Int? // role is optional
-  role         Role?  @relation(fields: [roleId], references: [id])
+  // roleId       Int? // role is optional
+  // role         Role?  @relation(fields: [roleId], references: [id])
+  roles Role[] @relation("UserRoles")
   createdById  Int?
   createdBy    User?  @relation("CreatedUsers", fields: [createdById], references: [id])
   createdUsers User[] @relation("CreatedUsers")
@@ -81,7 +82,7 @@ model SessionLog {
 model Role {
   id        Int      @id @default(autoincrement())
   name      String   @unique
-  users     User[]
+  users User[] @relation("UserRoles")
   createdAt DateTime @default(now())
 }
 
