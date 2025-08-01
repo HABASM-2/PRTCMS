@@ -13,11 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-// Type declarations (simplified)
+// Type declarations
 type Organisation = {
   id: number;
   name: string;
@@ -39,6 +38,7 @@ type AddUserFormProps = {
 
 export default function AddUserForm({ onSuccess }: AddUserFormProps) {
   const [loading, setLoading] = useState(false);
+  const [selectsLoading, setSelectsLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
@@ -54,6 +54,7 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
 
   useEffect(() => {
     const fetchData = async () => {
+      setSelectsLoading(true);
       try {
         const [rolesRes, orgsRes] = await Promise.all([
           fetch("/api/roles"),
@@ -67,6 +68,8 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
         setOrganisations(orgData);
       } catch (error) {
         console.error("Failed to fetch roles/orgs", error);
+      } finally {
+        setSelectsLoading(false);
       }
     };
 
@@ -117,6 +120,7 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
         setSelectedRoleId(null);
         setSelectedOrgId(null);
         setSelectedOrgUnitIds([]);
+        onSuccess?.();
       } else {
         const error = await res.json();
         toast.error(error.message || "Failed to create user");
@@ -183,16 +187,24 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
             <Select
               onValueChange={(val) => setSelectedRoleId(Number(val))}
               value={selectedRoleId?.toString() || ""}
+              disabled={selectsLoading}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
               <SelectContent>
-                {roles.map((role) => (
-                  <SelectItem key={role.id} value={role.id.toString()}>
-                    {role.name}
-                  </SelectItem>
-                ))}
+                {selectsLoading ? (
+                  <div className="flex items-center justify-center px-4 py-2 text-muted-foreground text-sm">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </div>
+                ) : (
+                  roles.map((role) => (
+                    <SelectItem key={role.id} value={role.id.toString()}>
+                      {role.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -202,16 +214,24 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
             <Select
               onValueChange={(val) => setSelectedOrgId(Number(val))}
               value={selectedOrgId?.toString() || ""}
+              disabled={selectsLoading}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select an organisation" />
               </SelectTrigger>
               <SelectContent>
-                {organisations.map((org) => (
-                  <SelectItem key={org.id} value={org.id.toString()}>
-                    {org.name}
-                  </SelectItem>
-                ))}
+                {selectsLoading ? (
+                  <div className="flex items-center justify-center px-4 py-2 text-muted-foreground text-sm">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </div>
+                ) : (
+                  organisations.map((org) => (
+                    <SelectItem key={org.id} value={org.id.toString()}>
+                      {org.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>

@@ -68,7 +68,9 @@ export default function UserTable() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [organisations, setOrganisations] = useState<{ id: number; name: string }[]>([]);
+  const [organisations, setOrganisations] = useState<
+    { id: number; name: string }[]
+  >([]);
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
 
   const [page, setPage] = useState(1);
@@ -78,19 +80,23 @@ export default function UserTable() {
   const [search, setSearch] = useState("");
 
   const fetchUsers = async () => {
+    setLoading(true); // <-- Start loading
     try {
       const params: Record<string, string> = {
         page: page.toString(),
         limit: limit.toString(),
       };
       if (search) params.search = search;
-      if (selectedOrgId !== null) params.organisationId = selectedOrgId.toString();
+      if (selectedOrgId !== null)
+        params.organisationId = selectedOrgId.toString();
 
       const res = await axios.get("/api/users", { params });
       setUsers(res.data.users);
       setTotal(res.data.total);
     } catch (err) {
       console.error("Error fetching users:", err);
+    } finally {
+      setLoading(false); // <-- Stop loading
     }
   };
 
@@ -100,7 +106,9 @@ export default function UserTable() {
 
   useEffect(() => {
     axios.get("/api/roles").then((res) => setRoles(res.data));
-    axios.get("/api/organisations/select").then((res) => setOrganisations(res.data));
+    axios
+      .get("/api/organisations/select")
+      .then((res) => setOrganisations(res.data));
   }, []);
 
   useEffect(() => {
@@ -109,9 +117,12 @@ export default function UserTable() {
       setSelectedOrgUnitIds([]);
 
       const orgId = selectedUser?.organisations?.[0]?.id;
-      const url = orgId
-        ? `/api/orgunits/org-units?id=${orgId}&userId=${selectedUser.id}`
-        : `/api/orgunits/all-for-user?id=${selectedUser.id}`;
+      const url =
+        orgId && selectedUser
+          ? `/api/orgunits/org-units?id=${orgId}&userId=${selectedUser.id}`
+          : selectedUser
+          ? `/api/orgunits/all-for-user?id=${selectedUser.id}`
+          : "";
 
       setOrgUnitLoading(true);
       try {
@@ -186,11 +197,12 @@ export default function UserTable() {
             ))}
           </SelectContent>
         </Select>
-
       </div>
 
       {loading ? (
-        <div className="text-center py-4">Loading...</div>
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       ) : (
         <Table>
           <TableHeader>
@@ -308,9 +320,21 @@ export default function UserTable() {
               }}
               className="space-y-4"
             >
-              <Input name="fullName" defaultValue={selectedUser.fullName} placeholder="Full Name" />
-              <Input name="username" defaultValue={selectedUser.username} placeholder="Username" />
-              <Input name="email" defaultValue={selectedUser.email} placeholder="Email" />
+              <Input
+                name="fullName"
+                defaultValue={selectedUser.fullName}
+                placeholder="Full Name"
+              />
+              <Input
+                name="username"
+                defaultValue={selectedUser.username}
+                placeholder="Username"
+              />
+              <Input
+                name="email"
+                defaultValue={selectedUser.email}
+                placeholder="Email"
+              />
               <Input name="password" placeholder="New Password (optional)" />
 
               <div>
@@ -382,7 +406,11 @@ export default function UserTable() {
               onClick={handleDelete}
               disabled={deleting}
             >
-              {deleting ? <Loader2 className="animate-spin w-4 h-4" /> : "Delete"}
+              {deleting ? (
+                <Loader2 className="animate-spin w-4 h-4" />
+              ) : (
+                "Delete"
+              )}
             </Button>
           </div>
         </DialogContent>
