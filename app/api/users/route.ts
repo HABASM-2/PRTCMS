@@ -64,6 +64,13 @@ export async function POST(req: Request) {
 
 
 export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const currentUserId = Number(session.user.id);
+
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
   const organisationId = searchParams.get("organisationId");
@@ -71,11 +78,15 @@ export async function GET(req: Request) {
   const limit = parseInt(searchParams.get("limit") || "10");
   const skip = (page - 1) * limit;
 
-  const AND: any[] = [];
+  const AND: any[] = [
+    {
+      id: {
+        not: currentUserId, // ✅ Filter out current user
+      },
+    },
+  ];
 
-  // Step 1: Filter users by organisation (direct or via org units)
   if (organisationId) {
-    // Get all OrgUnits under the organisation
     const orgUnits = await prisma.orgUnit.findMany({
       where: {
         organisationId: Number(organisationId),
@@ -85,7 +96,6 @@ export async function GET(req: Request) {
 
     const orgUnitIds = orgUnits.map((ou) => ou.id);
 
-    // Match users linked to these OrgUnits
     AND.push({
       UserOrgUnit: {
         some: {
@@ -95,7 +105,6 @@ export async function GET(req: Request) {
     });
   }
 
-  // Step 2: Add search logic if provided
   if (search) {
     AND.push({
       OR: [
@@ -106,7 +115,7 @@ export async function GET(req: Request) {
     });
   }
 
-  const whereClause = AND.length > 0 ? { AND } : {};
+  const whereClause = { AND };
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({

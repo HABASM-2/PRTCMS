@@ -51,6 +51,7 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
     email: "",
     password: "",
   });
+  const [orgUnitsLoading, setOrgUnitsLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,13 +80,15 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
   useEffect(() => {
     const fetchOrgUnits = async () => {
       if (!selectedOrgId) return;
-
+      setOrgUnitsLoading(true); // start spinner
       try {
         const res = await fetch(`/api/orgunits/org-units?id=${selectedOrgId}`);
         const data = await res.json();
-        setOrgUnits(data);
+        setOrgUnits(data); // store org units
       } catch (error) {
         console.error("Failed to fetch org units", error);
+      } finally {
+        setOrgUnitsLoading(false); // ✅ always stop spinner
       }
     };
 
@@ -190,7 +193,14 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
               disabled={selectsLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select a role" />
+                {selectsLoading ? (
+                  <div className="flex items-center text-muted-foreground">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select a role" />
+                )}
               </SelectTrigger>
               <SelectContent>
                 {selectsLoading ? (
@@ -217,7 +227,14 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
               disabled={selectsLoading}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select an organisation" />
+                {selectsLoading ? (
+                  <div className="flex items-center text-muted-foreground">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </div>
+                ) : (
+                  <SelectValue placeholder="Select an organisation" />
+                )}
               </SelectTrigger>
               <SelectContent>
                 {selectsLoading ? (
@@ -237,18 +254,36 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
           </div>
         </div>
 
-        {selectedOrgId && orgUnits.length > 0 && (
+        {selectedOrgId && (
           <div>
             <Label className="mb-2 block">Org Units</Label>
-            <OrgUnitTreeSelector
-              tree={orgUnits}
-              onChange={(ids) => setSelectedOrgUnitIds(ids)}
-            />
-            {selectedOrgUnitIds.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {selectedOrgUnitIds.length} unit
-                {selectedOrgUnitIds.length > 1 ? "s" : ""} selected
-              </p>
+
+            {orgUnitsLoading ? (
+              <div className="flex items-center text-muted-foreground text-sm px-2 py-3">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading organisation units...
+              </div>
+            ) : (
+              <>
+                {orgUnits.length > 0 ? (
+                  <>
+                    <OrgUnitTreeSelector
+                      tree={orgUnits}
+                      onChange={(ids) => setSelectedOrgUnitIds(ids)}
+                    />
+                    {selectedOrgUnitIds.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {selectedOrgUnitIds.length} unit
+                        {selectedOrgUnitIds.length > 1 ? "s" : ""} selected
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground px-2 py-3">
+                    No organisation units found for this organisation.
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
