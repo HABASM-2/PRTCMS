@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import OrgUnitTreeSelector from "./OrgUnitTreeSelector";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -12,17 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import OrgUnitSelector from "./OrgUnitSelector"; // ✅ Use the correct wrapper
 
-// Type declarations
 type Organisation = {
-  id: number;
-  name: string;
-};
-
-type OrgUnit = {
   id: number;
   name: string;
 };
@@ -41,17 +36,16 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
   const [selectsLoading, setSelectsLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
   const [organisations, setOrganisations] = useState<Organisation[]>([]);
-  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
   const [selectedOrgUnitIds, setSelectedOrgUnitIds] = useState<number[]>([]);
-  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
   const [formValues, setFormValues] = useState({
     fullName: "",
     username: "",
     email: "",
     password: "",
   });
-  const [orgUnitsLoading, setOrgUnitsLoading] = useState(false);
+  const [managerTag, setManagerTag] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,24 +71,6 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    const fetchOrgUnits = async () => {
-      if (!selectedOrgId) return;
-      setOrgUnitsLoading(true); // start spinner
-      try {
-        const res = await fetch(`/api/orgunits/org-units?id=${selectedOrgId}`);
-        const data = await res.json();
-        setOrgUnits(data); // store org units
-      } catch (error) {
-        console.error("Failed to fetch org units", error);
-      } finally {
-        setOrgUnitsLoading(false); // ✅ always stop spinner
-      }
-    };
-
-    fetchOrgUnits();
-  }, [selectedOrgId]);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues({ ...formValues, [e.target.name]: e.target.value });
   };
@@ -103,11 +79,22 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
     e.preventDefault();
     setLoading(true);
 
+    const managerRole = roles.find((r) => r.name.toLowerCase() === "manager");
+    const isManagerSelected =
+      managerRole && selectedRoleIds.includes(managerRole.id);
+
+    if (isManagerSelected && !managerTag.trim()) {
+      toast.error("Manager Tag is required.");
+      setLoading(false);
+      return;
+    }
+
     const payload = {
       ...formValues,
-      roleId: selectedRoleId,
+      roleIds: selectedRoleIds,
       organisationId: selectedOrgId,
       orgUnitIds: selectedOrgUnitIds,
+      managerTag: isManagerSelected ? managerTag : null,
     };
 
     try {
@@ -120,9 +107,10 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
       if (res.ok) {
         toast.success("User created successfully");
         setFormValues({ fullName: "", username: "", email: "", password: "" });
-        setSelectedRoleId(null);
+        setSelectedRoleIds([]);
         setSelectedOrgId(null);
         setSelectedOrgUnitIds([]);
+        setManagerTag("");
         onSuccess?.();
       } else {
         const error = await res.json();
@@ -185,40 +173,54 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Role Multi-Selection */}
           <div>
-            <Label>Role (optional)</Label>
-            <Select
-              onValueChange={(val) => setSelectedRoleId(Number(val))}
-              value={selectedRoleId?.toString() || ""}
-              disabled={selectsLoading}
-            >
-              <SelectTrigger>
-                {selectsLoading ? (
-                  <div className="flex items-center text-muted-foreground">
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Loading...
-                  </div>
-                ) : (
-                  <SelectValue placeholder="Select a role" />
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                {selectsLoading ? (
-                  <div className="flex items-center justify-center px-4 py-2 text-muted-foreground text-sm">
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Loading...
-                  </div>
-                ) : (
-                  roles.map((role) => (
-                    <SelectItem key={role.id} value={role.id.toString()}>
-                      {role.name}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <Label>Roles</Label>
+            {selectsLoading ? (
+              <div className="flex items-center text-muted-foreground text-sm px-2 py-3">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading...
+              </div>
+            ) : (
+              <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
+                {roles.map((role) => {
+                  const isManager = role.name.toLowerCase() === "manager";
+                  const checked = selectedRoleIds.includes(role.id);
+
+                  return (
+                    <div key={role.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`role-${role.id}`}
+                        checked={checked}
+                        onCheckedChange={(checked) => {
+                          setSelectedRoleIds((prev) =>
+                            checked
+                              ? [...prev, role.id]
+                              : prev.filter((id) => id !== role.id)
+                          );
+                        }}
+                      />
+                      <Label htmlFor={`role-${role.id}`} className="text-sm">
+                        {role.name}
+                      </Label>
+
+                      {isManager && checked && (
+                        <Input
+                          className="ml-2 h-8 w-60"
+                          placeholder="Manager Tag"
+                          value={managerTag}
+                          onChange={(e) => setManagerTag(e.target.value)}
+                          required
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
+          {/* Organisation Select */}
           <div>
             <Label>Organisation</Label>
             <Select
@@ -237,53 +239,30 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
                 )}
               </SelectTrigger>
               <SelectContent>
-                {selectsLoading ? (
-                  <div className="flex items-center justify-center px-4 py-2 text-muted-foreground text-sm">
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Loading...
-                  </div>
-                ) : (
-                  organisations.map((org) => (
-                    <SelectItem key={org.id} value={org.id.toString()}>
-                      {org.name}
-                    </SelectItem>
-                  ))
-                )}
+                {organisations.map((org) => (
+                  <SelectItem key={org.id} value={org.id.toString()}>
+                    {org.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
 
+        {/* Org Units */}
         {selectedOrgId && (
           <div>
             <Label className="mb-2 block">Org Units</Label>
-
-            {orgUnitsLoading ? (
-              <div className="flex items-center text-muted-foreground text-sm px-2 py-3">
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading organisation units...
-              </div>
-            ) : (
-              <>
-                {orgUnits.length > 0 ? (
-                  <>
-                    <OrgUnitTreeSelector
-                      tree={orgUnits}
-                      onChange={(ids) => setSelectedOrgUnitIds(ids)}
-                    />
-                    {selectedOrgUnitIds.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {selectedOrgUnitIds.length} unit
-                        {selectedOrgUnitIds.length > 1 ? "s" : ""} selected
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground px-2 py-3">
-                    No organisation units found for this organisation.
-                  </p>
-                )}
-              </>
+            <OrgUnitSelector
+              userId={0} // new user, no assignments yet
+              organisationId={selectedOrgId}
+              onChange={(ids) => setSelectedOrgUnitIds(ids)}
+            />
+            {selectedOrgUnitIds.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {selectedOrgUnitIds.length} unit
+                {selectedOrgUnitIds.length > 1 ? "s" : ""} selected
+              </p>
             )}
           </div>
         )}

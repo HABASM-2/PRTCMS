@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import OrgUnitTreeSelectorModal from "./OrgUnitTreeSelectorModal";
 import OrgUnitTreeSelector from "./OrgUnitTreeSelector";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import {
@@ -29,6 +28,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import axios from "axios";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface User {
   id: number;
@@ -40,6 +41,7 @@ interface User {
   UserOrgUnit?: {
     orgUnit: { id: number; name: string; parentId?: number | null };
   }[];
+  managerTag?: string; // ✅ Add this if managerTag is expected on user
 }
 
 interface OrgUnit {
@@ -78,6 +80,7 @@ export default function UserTable() {
   const [total, setTotal] = useState(0);
 
   const [search, setSearch] = useState("");
+  const [managerTag, setManagerTag] = useState("");
 
   const fetchUsers = async () => {
     setLoading(true); // <-- Start loading
@@ -123,7 +126,7 @@ export default function UserTable() {
           : selectedUser
           ? `/api/orgunits/all-for-user?id=${selectedUser.id}`
           : "";
-
+      console.log("Fetching org units from URL:", url);
       setOrgUnitLoading(true);
       try {
         const res = await axios.get(url);
@@ -142,6 +145,17 @@ export default function UserTable() {
           ? selectedUser.roles.map((r) => r.id)
           : []
       );
+
+      // ✅ Set manager tag if the user is a manager
+      const manager = selectedUser.roles?.find(
+        (r) => r.name.toLowerCase() === "manager"
+      );
+      setManagerTag(
+        manager && "managerTag" in selectedUser
+          ? (selectedUser as any).managerTag || ""
+          : ""
+      );
+
       loadOrgUnits();
     }
   }, [selectedUser]);
@@ -221,16 +235,34 @@ export default function UserTable() {
                 <TableCell>{user.fullName}</TableCell>
                 <TableCell>{user.username}</TableCell>
                 <TableCell>{user.email}</TableCell>
-                <TableCell>{user.roles?.[0]?.name || "-"}</TableCell>
                 <TableCell>
-                  {user.UserOrgUnit?.filter(
-                    (uo) =>
-                      !user.UserOrgUnit?.some(
-                        (other) => other.orgUnit.parentId === uo.orgUnit.id
+                  <div className="flex flex-wrap gap-1">
+                    {user.roles?.map((role) => {
+                      const isManager = role.name.toLowerCase() === "manager";
+                      return (
+                        <span
+                          key={role.id}
+                          className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full"
+                        >
+                          {isManager && user.managerTag
+                            ? `${role.name} (${user.managerTag})`
+                            : role.name}
+                        </span>
+                      );
+                    }) || "-"}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {user.UserOrgUnit && user.UserOrgUnit.length > 0
+                    ? user.UserOrgUnit.filter(
+                        (uo) =>
+                          !user.UserOrgUnit?.some(
+                            (other) => other.orgUnit.parentId === uo.orgUnit.id
+                          )
                       )
-                  )
-                    .map((uo) => uo.orgUnit.name)
-                    .join(", ")}
+                        .map((uo) => uo.orgUnit.name)
+                        .join(", ")
+                    : user.organisations?.[0]?.name || "-"}
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-2">
@@ -305,6 +337,13 @@ export default function UserTable() {
                   password: formData.get("password") || undefined,
                   roleIds: selectedRoleIds,
                   orgUnitIds: selectedOrgUnitIds,
+                  managerTag: selectedRoleIds.some(
+                    (id) =>
+                      roles.find((r) => r.id === id)?.name.toLowerCase() ===
+                      "manager"
+                  )
+                    ? managerTag
+                    : null,
                 };
 
                 try {
@@ -338,22 +377,45 @@ export default function UserTable() {
               <Input name="password" placeholder="New Password (optional)" />
 
               <div>
-                <p className="font-semibold mb-1">Assign Role</p>
-                <Select
-                  defaultValue={selectedUser?.roles?.[0]?.id.toString() || ""}
-                  onValueChange={(val) => setSelectedRoleIds([parseInt(val)])}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.id.toString()}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <p className="font-semibold mb-1">Assign Roles</p>
+                <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
+                  {roles.map((role) => {
+                    const isManager = role.name.toLowerCase() === "manager";
+                    const checked = selectedRoleIds.includes(role.id);
+
+                    return (
+                      <div key={role.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`edit-role-${role.id}`}
+                          checked={checked}
+                          onCheckedChange={(checked) => {
+                            setSelectedRoleIds((prev) =>
+                              checked
+                                ? [...prev, role.id]
+                                : prev.filter((id) => id !== role.id)
+                            );
+                          }}
+                        />
+                        <Label
+                          htmlFor={`edit-role-${role.id}`}
+                          className="text-sm"
+                        >
+                          {role.name}
+                        </Label>
+
+                        {/* ✅ Show Manager Tag Input if selected */}
+                        {isManager && checked && (
+                          <Input
+                            placeholder="Manager Tag"
+                            className="ml-2 h-8 w-60"
+                            value={managerTag}
+                            onChange={(e) => setManagerTag(e.target.value)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
@@ -363,13 +425,10 @@ export default function UserTable() {
                     <Loader2 className="animate-spin w-4 h-4 mr-2" />
                     Loading organisation units...
                   </div>
-                ) : selectedUser?.organisations?.[0]?.id ? (
-                  <OrgUnitTreeSelectorModal
-                    organisationId={selectedUser.organisations[0].id}
-                    userId={selectedUser.id}
-                    selectedOrgUnitIds={selectedOrgUnitIds}
-                    onChange={setSelectedOrgUnitIds}
-                  />
+                ) : orgUnitTree.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No organisation units found.
+                  </p>
                 ) : (
                   <OrgUnitTreeSelector
                     tree={orgUnitTree}

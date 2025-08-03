@@ -1,17 +1,9 @@
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { redirect } from "next/navigation";
 import { Building2, Users, Activity, Star } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function SuperPage() {
-  const session = await getServerSession(authOptions);
-
-  if (!session || session.user.role !== "super") {
-    redirect("/login");
-  }
-
   // Replace with real queries
   const stats = {
     totalOrganizations: 12,

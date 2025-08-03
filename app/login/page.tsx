@@ -13,22 +13,31 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const router = useRouter();
   const { data: session, status } = useSession();
 
   useEffect(() => {
     if (status === "loading") return;
-    if (session?.user?.role) {
+
+    if (session?.user?.roles?.length) {
+      // OPTION 1: Always redirect to /super (default behavior)
+      router.replace("/super");
+
+      // OPTION 2: Redirect based on first matching role (optional alternative)
+      /*
       const roleRedirects: Record<string, string> = {
         super: "/super",
         admin: "/admin",
         manager: "/manager",
         user: "/user",
       };
-      const redirectPath = roleRedirects[session.user.role];
+
+      const redirectPath = session.user.roles.find((role) => roleRedirects[role]);
       if (redirectPath) {
-        router.replace(redirectPath);
+        router.replace(roleRedirects[redirectPath]);
       }
+      */
     }
   }, [session, status, router]);
 
@@ -45,7 +54,7 @@ export default function LoginPage() {
     setLoading(false);
 
     if (res?.ok) {
-      router.push("/super");
+      // Will trigger session reload and redirect via useEffect
     } else {
       setError("Invalid username or password");
     }

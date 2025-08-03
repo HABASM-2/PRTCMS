@@ -4,35 +4,37 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { NextAuthOptions } from "next-auth";
 
-// Extend NextAuth types to include custom properties
 import type { DefaultSession, DefaultUser } from "next-auth";
 
+// --- Type extensions ---
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      role: string;
       username: string;
       email?: string;
+      roles: string[]; // ⬅️ multiple roles
     } & DefaultSession["user"];
   }
+
   interface User extends DefaultUser {
     id: string;
-    role: string;
     username: string;
     email?: string;
+    roles: string[];
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
-    role: string;
     username: string;
     email?: string;
+    roles: string[];
   }
 }
 
+// --- Auth config ---
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -44,7 +46,9 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         const user = await prisma.user.findUnique({
           where: { username: credentials?.username },
-          include: { role: true }, // ⬅️ include Role relation
+          include: {
+            roles: true, // ⬅️ get multiple roles
+          },
         });
 
         if (!user) return null;
@@ -56,43 +60,46 @@ export const authOptions: NextAuthOptions = {
         if (!isValid) return null;
 
         return {
-          id: user.id + "",
+          id: user.id.toString(),
           name: user.fullName,
           username: user.username,
-          email: user.email || undefined,
-          role: user.role?.name || "user", // ⬅️ get role name safely
+          email: user.email ?? undefined,
+          roles: user.roles.map((r) => r.name), // ⬅️ return array of role names
         };
       },
     }),
   ],
+
   session: {
     strategy: "jwt",
   },
+
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
+        token.id = user.id;
         token.username = user.username;
         token.email = user.email;
-        token.id = user.id;
+        token.roles = user.roles ?? []; // ✅ fallback to empty array
       }
       return token;
     },
     async session({ session, token }) {
-      session.user.role = token.role;
-      session.user.username = token.username;
-      session.user.email = token.email;
-      session.user.id = token.id;
-
+      session.user.id = token.id as string;
+      session.user.username = token.username as string;
+      session.user.email = token.email ?? undefined;
+      session.user.roles = token.roles ?? []; // ✅ fallback to empty array
       return session;
     },
   },
+
   pages: {
     signIn: "/login",
   },
+
   secret: process.env.NEXTAUTH_SECRET,
 };
 
+// --- Route handler ---
 const handler = NextAuth(authOptions);
-
 export { handler as GET, handler as POST };

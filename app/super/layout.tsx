@@ -1,12 +1,11 @@
 import "@/app/globals.css";
 import { ReactNode } from "react";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/Logout";
 import { SuperNavDesktop } from "./components/SuperNavDesktop";
 import { SuperNavMobile } from "./components/SuperNavMobile";
 import { Toaster } from "sonner";
+import { auth } from "@/lib/auth";
 
 import {
   DropdownMenu,
@@ -23,13 +22,21 @@ type Props = {
 };
 
 export default async function SuperLayout({ children }: Props) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
-  if (!session || session.user.role !== "super") {
+  if (!session) {
     redirect("/login");
   }
 
-  const { name, email, role, id } = session.user;
+  const user = session.user;
+
+  if (!user?.id || !user?.roles?.length) {
+    console.warn("User session is missing id or roles. Redirecting.");
+    redirect("/login");
+  }
+  console.log("SuperLayout session:", session);
+
+  const { name, email, roles, id } = session.user;
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-white text-gray-900 dark:bg-gray-950 dark:text-white transition-colors">
@@ -49,10 +56,12 @@ export default async function SuperLayout({ children }: Props) {
               <Mail className="w-4 h-4 mr-2" />
               {email}
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <ShieldCheck className="w-4 h-4 mr-2" />
-              {role}
-            </DropdownMenuItem>
+            {roles?.map((r) => (
+              <DropdownMenuItem key={r}>
+                <ShieldCheck className="w-4 h-4 mr-2" />
+                {r}
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuItem>
               <User className="w-4 h-4 mr-2" />
               ID: {id}
@@ -89,10 +98,12 @@ export default async function SuperLayout({ children }: Props) {
               <Mail className="w-4 h-4 mr-2" />
               {email}
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <ShieldCheck className="w-4 h-4 mr-2" />
-              {role}
-            </DropdownMenuItem>
+            {roles?.map((r) => (
+              <DropdownMenuItem key={r}>
+                <ShieldCheck className="w-4 h-4 mr-2" />
+                {r}
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuItem>
               <User className="w-4 h-4 mr-2" />
               ID: {id}
@@ -115,7 +126,7 @@ export default async function SuperLayout({ children }: Props) {
       {/* Main Content */}
       <main className="flex-1 p-6">
         {children}
-        <Toaster richColors /> {/* 👈 Required for toasts to show */}
+        <Toaster richColors />
       </main>
     </div>
   );
