@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import OrgUnitTreeSelector from "./OrgUnitTreeSelector";
+import OrgUnitTreeSelector from "./OrgUnitTreeSelector2";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import {
   Select,
@@ -120,13 +120,12 @@ export default function UserTable() {
       setSelectedOrgUnitIds([]);
 
       const orgId = selectedUser?.organisations?.[0]?.id;
-      const url =
-        orgId && selectedUser
-          ? `/api/orgunits/org-units?id=${orgId}&userId=${selectedUser.id}`
-          : selectedUser
-          ? `/api/orgunits/all-for-user?id=${selectedUser.id}`
-          : "";
-      console.log("Fetching org units from URL:", url);
+      const url = `/api/orgunits/trees?${
+        selectedUser?.organisations?.[0]?.id
+          ? `organisationId=${selectedUser.organisations[0].id}&`
+          : ""
+      }userId=${selectedUser?.id}`;
+
       setOrgUnitLoading(true);
       try {
         const res = await axios.get(url);
@@ -344,6 +343,8 @@ export default function UserTable() {
                   )
                     ? managerTag
                     : null,
+                  organisationIds:
+                    selectedUser?.organisations?.map((o) => o.id) ?? [],
                 };
 
                 try {

@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       password,
       organisationId,
       orgUnitIds,
-      roleId, // this is expected to be a single role ID
+      roleIds, // this is expected to be a multipple role idD
       createdById,
     } = body;
 
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
         // ✅ Connect one role by ID
         roles: {
-          connect: roleId ? [{ id: roleId }] : [],
+          connect: roleIds?.map((id: number) => ({ id })) ?? [],
         },
 
         // ✅ Connect organisation

@@ -5,8 +5,8 @@ import { Loader2 } from "lucide-react";
 import OrgUnitTreeSelector from "./OrgUnitTreeSelector";
 
 interface Props {
-  userId: number;
-  organisationId: number; // always required
+  userId?: number; // optional
+  organisationId: number;
   onChange: (selected: number[]) => void;
 }
 
@@ -19,7 +19,6 @@ export default function OrgUnitSelector({
   const [selectedOrgUnitIds, setSelectedOrgUnitIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 🔒 Stabilize onChange reference to avoid infinite loop
   const stableOnChange = useRef(onChange);
   useEffect(() => {
     stableOnChange.current = onChange;
@@ -32,14 +31,18 @@ export default function OrgUnitSelector({
       setSelectedOrgUnitIds([]);
 
       try {
-        const res = await fetch(
-          `/api/orgunits/tree?id=${organisationId}&userId=${userId}`
-        );
+        const url =
+          userId !== undefined
+            ? `/api/orgunits/tree?id=${organisationId}&userId=${userId}`
+            : `/api/orgunits/tree?id=${organisationId}`;
+
+        const res = await fetch(url);
         const data = await res.json();
 
-        setOrgUnitTree(data.tree || []);
-        setSelectedOrgUnitIds(data.assignedOrgUnitIds || []);
-        stableOnChange.current(data.assignedOrgUnitIds || []);
+        setOrgUnitTree(data.tree || data || []);
+        const assigned = data.assignedOrgUnitIds || [];
+        setSelectedOrgUnitIds(assigned);
+        stableOnChange.current(assigned);
       } catch (err) {
         console.error("Failed to load organisation units", err);
       } finally {
@@ -47,10 +50,10 @@ export default function OrgUnitSelector({
       }
     };
 
-    if (userId && organisationId) {
+    if (organisationId) {
       loadOrgUnits();
     }
-  }, [userId, organisationId]); // ✅ onChange removed
+  }, [userId, organisationId]);
 
   if (loading) {
     return (

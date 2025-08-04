@@ -103,7 +103,7 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
+      console.log("Response from user creation:", payload);
       if (res.ok) {
         toast.success("User created successfully");
         setFormValues({ fullName: "", username: "", email: "", password: "" });
