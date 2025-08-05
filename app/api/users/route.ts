@@ -16,6 +16,7 @@ export async function POST(req: Request) {
       organisationId,
       orgUnitIds,
       roleIds, // this is expected to be a multipple role idD
+      managerTag,
       createdById,
     } = body;
 
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
         email,
         username,
         password: hashedPassword,
+        managerTag,
         createdById,
 
         // ✅ Connect one role by ID

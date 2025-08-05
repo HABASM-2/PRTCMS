@@ -17,6 +17,7 @@ export async function PUT(
     roleIds,
     organisationIds,
     orgUnitIds,
+     managerTag,
   } = body;
 
   try {
@@ -32,6 +33,7 @@ export async function PUT(
         fullName,
         username,
         email,
+        managerTag,
         ...(hashedPassword && { password: hashedPassword }), // ← set only if present
 
         roles: {
