@@ -23,114 +23,125 @@ export default function OrgUnitTreeSelector({
   selectedIds = [],
   onChange,
 }: Props) {
-  const flattenTree = (units: OrgUnit[]): OrgUnit[] => {
-    const result: OrgUnit[] = [];
-    const traverse = (list: OrgUnit[]) => {
-      for (const unit of list) {
-        result.push(unit);
-        if (unit.children) traverse(unit.children);
+  // Utility: flatten tree, but keep path to identify node uniquely
+  const flattenTreeWithPaths = (
+    units: OrgUnit[],
+    pathPrefix: string[] = []
+  ): { node: OrgUnit; path: string; parentPath: string | null }[] => {
+    let result: { node: OrgUnit; path: string; parentPath: string | null }[] =
+      [];
+
+    units.forEach((unit, index) => {
+      const currentPath = [...pathPrefix, index.toString()];
+      const pathStr = currentPath.join("-");
+
+      result.push({
+        node: unit,
+        path: pathStr,
+        parentPath: pathPrefix.length ? pathPrefix.join("-") : null,
+      });
+
+      if (unit.children) {
+        result = result.concat(
+          flattenTreeWithPaths(unit.children, currentPath)
+        );
       }
-    };
-    traverse(units);
+    });
+
     return result;
   };
 
-  const allUnits = flattenTree(tree);
+  const flatNodes = flattenTreeWithPaths(tree);
 
-  const findTopRoot = (): OrgUnit | null => {
-    const all = flattenTree(tree);
-    const unitMap = new Map<number, OrgUnit>();
-    all.forEach((u) => unitMap.set(u.id, u));
-    let current = all[0];
-    while (current?.parentId !== null) {
-      const parent = unitMap.get(current.parentId!);
-      if (!parent) break;
-      current = parent;
-    }
-    return current ?? null;
-  };
+  // Find top root path and id
+  const topRoot = tree.length > 0 ? tree[0] : null;
+  const rootPath = "0"; // root always at index 0 in tree
 
-  const topRoot = findTopRoot();
-  const rootId = topRoot?.id;
+  // Selected state uses path strings internally, but for external onChange we only send ids
+  // We'll keep a map of path->nodeId
+  const pathToId = new Map(flatNodes.map(({ node, path }) => [path, node.id]));
 
-  const [selected, setSelected] = useState<number[]>(() => {
-    const initial = new Set(selectedIds);
-    if (rootId !== undefined) initial.add(rootId); // Always include root
-    return Array.from(initial);
-  });
+  // Initialize selected by matching selectedIds with nodes (by id)
+  const initialSelectedPaths = new Set<string>(
+    flatNodes
+      .filter(({ node }) => selectedIds.includes(node.id))
+      .map(({ path }) => path)
+  );
 
-  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  // Always include rootPath in selection
+  // initialSelectedPaths.add(rootPath);
 
+  const [selectedPaths, setSelectedPaths] =
+    useState<Set<string>>(initialSelectedPaths);
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  // Whenever selectedPaths changes, notify onChange with the list of unique ids
   useEffect(() => {
-    if (rootId !== undefined && !selected.includes(rootId)) {
-      setSelected((prev) => [...prev, rootId]);
-    }
-  }, [rootId]);
+    const ids = new Set<number>();
+    selectedPaths.forEach((path) => {
+      if (path === rootPath) return; // Skip root
+      const id = pathToId.get(path);
+      if (id !== undefined) ids.add(id);
+    });
+    onChange(Array.from(ids));
+  }, [selectedPaths]);
 
-  useEffect(() => {
-    onChange(selected);
-  }, [selected]);
-
-  const toggleExpand = (id: number) => {
-    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleExpand = (path: string) => {
+    setExpanded((prev) => ({ ...prev, [path]: !prev[path] }));
   };
 
-  const selectWithParents = (
-    unit: OrgUnit,
-    allUnits: OrgUnit[],
-    current: number[]
-  ): number[] => {
-    const updated = new Set(current);
-    updated.add(unit.id);
-
-    let parentId = unit.parentId;
-    while (parentId !== null && parentId !== undefined && parentId !== rootId) {
-      const parent = allUnits.find((u) => u.id === parentId);
-      if (!parent) break;
-      updated.add(parent.id);
-      parentId = parent.parentId;
-    }
-
-    return Array.from(updated);
+  // Helper: get parent path of a node path, or null if root
+  const getParentPath = (path: string): string | null => {
+    const parts = path.split("-");
+    if (parts.length <= 1) return null;
+    return parts.slice(0, -1).join("-");
   };
 
-  const removeWithChildren = (unit: OrgUnit, current: number[]): number[] => {
-    const updated = new Set(current);
-    const removeIds = collectChildren(unit);
-    removeIds.push(unit.id);
-    for (const id of removeIds) {
-      if (id !== rootId) updated.delete(id); // Never remove root
+  // Select node with parents (by path)
+  const selectWithParents = (path: string): Set<string> => {
+    const updated = new Set(selectedPaths);
+    updated.add(path);
+
+    // Walk up and add parents, but skip rootPath
+    let parent = getParentPath(path);
+    while (parent !== null && parent !== rootPath) {
+      updated.add(parent);
+      parent = getParentPath(parent);
     }
-    return Array.from(updated);
+
+    return updated;
   };
 
-  const collectChildren = (unit: OrgUnit): number[] => {
-    const result: number[] = [];
-    const stack = [...(unit.children || [])];
-    while (stack.length) {
-      const current = stack.pop()!;
-      result.push(current.id);
-      if (current.children) stack.push(...current.children);
+  // Remove node and all its children (by path)
+  const removeWithChildren = (path: string): Set<string> => {
+    const updated = new Set(selectedPaths);
+
+    for (const p of pathToId.keys()) {
+      if (p === path || p.startsWith(path + "-")) {
+        updated.delete(p);
+      }
     }
-    return result;
+    return updated;
   };
 
-  const renderTree = (units: OrgUnit[], allUnits: OrgUnit[], depth = 0) => {
-    return units.map((unit) => {
-      const isChecked = selected.includes(unit.id);
+  const renderTree = (units: OrgUnit[], pathPrefix: string[] = []) => {
+    return units.map((unit, index) => {
+      const path = [...pathPrefix, index.toString()].join("-");
+      const isChecked = selectedPaths.has(path);
       const hasChildren = unit.children && unit.children.length > 0;
-      const isOpen = expanded[unit.id];
-      const isRoot = unit.id === rootId;
+      const isOpen = expanded[path];
+      const isRoot = path === rootPath;
 
       return (
-        <div key={unit.id} className="pl-4">
+        <div key={path} className="pl-4">
           <div className="flex items-center gap-2">
             {hasChildren ? (
               <Button
                 variant="ghost"
                 size="icon"
                 type="button"
-                onClick={() => toggleExpand(unit.id)}
+                onClick={() => toggleExpand(path)}
               >
                 {isOpen ? (
                   <ChevronDown size={16} />
@@ -143,14 +154,14 @@ export default function OrgUnitTreeSelector({
             )}
 
             <Checkbox
-              checked={isChecked}
+              checked={isRoot ? true : isChecked}
               disabled={isRoot}
               onCheckedChange={(checked) => {
                 if (isRoot) return;
                 if (checked) {
-                  setSelected(selectWithParents(unit, allUnits, selected));
+                  setSelectedPaths(selectWithParents(path));
                 } else {
-                  setSelected(removeWithChildren(unit, selected));
+                  setSelectedPaths(removeWithChildren(path));
                 }
               }}
             />
@@ -161,7 +172,7 @@ export default function OrgUnitTreeSelector({
 
           {hasChildren && isOpen && (
             <div className="ml-4 border-l border-gray-200 dark:border-gray-700 pl-2">
-              {renderTree(unit.children!, allUnits, depth + 1)}
+              {renderTree(unit.children!, [...pathPrefix, index.toString()])}
             </div>
           )}
         </div>
@@ -169,5 +180,5 @@ export default function OrgUnitTreeSelector({
     });
   };
 
-  return <div>{renderTree(tree, allUnits)}</div>;
+  return <div>{renderTree(tree)}</div>;
 }
