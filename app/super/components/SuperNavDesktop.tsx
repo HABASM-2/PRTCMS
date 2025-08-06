@@ -10,6 +10,7 @@ const navItems = [
   { name: "Dashboard", href: "/super", icon: LayoutDashboard },
   { name: "Organisation", href: "/super/orgs", icon: Building },
   { name: "Users", href: "/super/users", icon: User },
+  { name: "Notices", href: "/super/notices", icon: User },
   { name: "Settings", href: "/super/settings", icon: Settings },
 ];
 

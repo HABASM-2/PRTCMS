@@ -36,13 +36,14 @@ model User {
   createdBy    User?  @relation("CreatedUsers", fields: [createdById], references: [id])
   createdUsers User[] @relation("CreatedUsers")
 
-  organisations Organisation[] @relation("UserOrganisations")
-  Organisation  Organisation[] @relation("CreatedBy")
-  managerTag    String?
-  ActivityLog   ActivityLog[]
-  SessionLogs   SessionLog[] // ← NEW
-  createdAt     DateTime       @default(now())
-  UserOrgUnit   UserOrgUnit[]
+  organisations  Organisation[]   @relation("UserOrganisations")
+  Organisation   Organisation[]   @relation("CreatedBy")
+  managerTag     String?
+  ActivityLog    ActivityLog[]
+  SessionLogs    SessionLog[] // ← NEW
+  createdAt      DateTime         @default(now())
+  UserOrgUnit    UserOrgUnit[]
+  ProposalNotice ProposalNotice[]
 }
 
 model ActivityLog {
@@ -63,11 +64,12 @@ model OrgUnit {
   organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   organisationId Int
 
-  parent      OrgUnit?      @relation("ParentChild", fields: [parentId], references: [id])
-  parentId    Int?
-  children    OrgUnit[]     @relation("ParentChild")
-  createdAt   DateTime      @default(now())
-  UserOrgUnit UserOrgUnit[]
+  parent         OrgUnit?         @relation("ParentChild", fields: [parentId], references: [id])
+  parentId       Int?
+  children       OrgUnit[]        @relation("ParentChild")
+  createdAt      DateTime         @default(now())
+  UserOrgUnit    UserOrgUnit[]
+  ProposalNotice ProposalNotice[]
 }
 
 model SessionLog {
@@ -97,4 +99,20 @@ model UserOrgUnit {
   assignedAt DateTime @default(now())
 
   @@id([userId, orgUnitId])
+}
+
+model ProposalNotice {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  fileUrl     String? // Optional link to file or attachment
+  orgUnit     OrgUnit  @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+  orgUnitId   Int
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdById Int
+  expiredAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([orgUnitId])
+  @@index([createdById])
 }
