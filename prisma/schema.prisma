@@ -44,6 +44,8 @@ model User {
   createdAt      DateTime         @default(now())
   UserOrgUnit    UserOrgUnit[]
   ProposalNotice ProposalNotice[]
+  SubmitProposal SubmitProposal[]
+  ProposalReview ProposalReview[]
 }
 
 model ActivityLog {
@@ -70,6 +72,7 @@ model OrgUnit {
   createdAt      DateTime         @default(now())
   UserOrgUnit    UserOrgUnit[]
   ProposalNotice ProposalNotice[]
+  SubmitProposal SubmitProposal[]
 }
 
 model SessionLog {
@@ -102,17 +105,67 @@ model UserOrgUnit {
 }
 
 model ProposalNotice {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?
-  fileUrl     String? // Optional link to file or attachment
-  orgUnit     OrgUnit  @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
-  orgUnitId   Int
-  createdBy   User     @relation(fields: [createdById], references: [id])
-  createdById Int
-  expiredAt   DateTime
-  createdAt   DateTime @default(now())
+  id             Int              @id @default(autoincrement())
+  title          String
+  description    String?
+  fileUrl        String? // Optional link to file or attachment
+  orgUnit        OrgUnit          @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+  orgUnitId      Int
+  createdBy      User             @relation(fields: [createdById], references: [id])
+  createdById    Int
+  expiredAt      DateTime
+  createdAt      DateTime         @default(now())
+  SubmitProposal SubmitProposal[]
 
   @@index([orgUnitId])
   @@index([createdById])
+}
+
+model SubmitProposal {
+  id           Int      @id @default(autoincrement())
+  title        String
+  description  String?
+  participants String[]
+  fileUrl      String?
+
+  submittedBy   User @relation(fields: [submittedById], references: [id])
+  submittedById Int
+
+  notice   ProposalNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  noticeId Int
+
+  orgUnit   OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+  orgUnitId Int
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  ProposalReview ProposalReview[]
+
+  @@unique([submittedById, noticeId]) // prevent duplicate submissions
+  @@index([submittedById])
+  @@index([noticeId])
+  @@index([orgUnitId])
+}
+
+model ProposalReview {
+  id         Int            @id @default(autoincrement())
+  proposal   SubmitProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId Int
+
+  reviewer   User @relation(fields: [reviewerId], references: [id])
+  reviewerId Int
+
+  status    ReviewStatus
+  comments  String?
+  createdAt DateTime     @default(now())
+
+  @@index([proposalId])
+  @@index([reviewerId])
+}
+
+enum ReviewStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  NEEDS_MODIFICATION
 }

@@ -34,7 +34,6 @@ export default async function SuperLayout({ children }: Props) {
     console.warn("User session is missing id or roles. Redirecting.");
     redirect("/login");
   }
-  console.log("SuperLayout session:", session);
 
   const { name, email, roles, id } = session.user;
 

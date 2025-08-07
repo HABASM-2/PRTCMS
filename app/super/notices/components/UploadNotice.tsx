@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { CalendarIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -15,8 +15,13 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner"; // ✅ Sonner toast
 
-export default function UploadNotice() {
+interface UploadNoticeProps {
+  userId: string;
+}
+
+export default function UploadNotice({ userId }: UploadNoticeProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedOrgUnitIds, setSelectedOrgUnitIds] = useState<number[]>([]);
@@ -26,12 +31,9 @@ export default function UploadNotice() {
 
   const [orgUnitTree, setOrgUnitTree] = useState<any[]>([]);
   const [assignedOrgUnitIds, setAssignedOrgUnitIds] = useState<number[]>([]);
-
-  // Ancestors of assigned units
   const [ancestorOrgUnitIds, setAncestorOrgUnitIds] = useState<Set<number>>(
     new Set()
   );
-  // Descendants of assigned units (interactive children only)
   const [descendantOrgUnitIds, setDescendantOrgUnitIds] = useState<Set<number>>(
     new Set()
   );
@@ -39,12 +41,12 @@ export default function UploadNotice() {
   const [siblingOrgUnitIds, setSiblingOrgUnitIds] = useState<Set<number>>(
     new Set()
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Helper: get ancestors of assigned nodes
+  // Helpers...
   function getAncestorIds(tree: any[], assignedIds: number[]): Set<number> {
     const ancestorIds = new Set<number>();
     const map = new Map<number, any>();
-
     function mapUnits(units: any[]) {
       for (const unit of units) {
         map.set(unit.id, unit);
@@ -52,7 +54,6 @@ export default function UploadNotice() {
       }
     }
     mapUnits(tree);
-
     for (const assignedId of assignedIds) {
       let current = map.get(assignedId);
       while (current?.parentId && map.has(current.parentId)) {
@@ -60,62 +61,50 @@ export default function UploadNotice() {
         current = map.get(current.parentId);
       }
     }
-
     return ancestorIds;
   }
 
   function collectSiblingIds(tree: any[], assignedIds: number[]): Set<number> {
     const siblings = new Set<number>();
-
     function dfs(units: any[]) {
       for (const unit of units) {
-        if (unit.children && unit.children.length > 0) {
+        if (unit.children?.length > 0) {
           const childrenIds = unit.children.map((child: any) => child.id);
           const assignedInChildren = childrenIds.filter((id: number) =>
             assignedIds.includes(id)
           );
-
           if (assignedInChildren.length > 0) {
-            // All siblings of assigned children
             childrenIds.forEach((id: number) => {
-              if (!assignedIds.includes(id)) {
-                siblings.add(id);
-              }
+              if (!assignedIds.includes(id)) siblings.add(id);
             });
           }
-
           unit.children.forEach((child: any) => dfs([child]));
         }
       }
     }
-
     dfs(tree);
     return siblings;
   }
 
-  // Helper: get only true descendants of assigned nodes
   function collectDescendants(tree: any[], assignedIds: number[]): Set<number> {
     const descendants = new Set<number>();
-
     function markDescendants(node: any) {
       if (node.children) {
         for (const child of node.children) {
           descendants.add(child.id);
-          markDescendants(child); // recurse
+          markDescendants(child);
         }
       }
     }
-
     function dfs(nodes: any[]) {
       for (const node of nodes) {
         if (assignedIds.includes(node.id)) {
-          markDescendants(node); // only descendants of assigned node
+          markDescendants(node);
         } else if (node.children) {
-          dfs(node.children); // keep searching
+          dfs(node.children);
         }
       }
     }
-
     dfs(tree);
     return descendants;
   }
@@ -130,8 +119,6 @@ export default function UploadNotice() {
         console.error("Failed to fetch org units:", data.error);
         return;
       }
-
-      const assignedIdsSet = new Set(data.assignedOrgUnitIds);
       const ancestorIds = getAncestorIds(data.tree, data.assignedOrgUnitIds);
       const descendantIds = collectDescendants(
         data.tree,
@@ -144,11 +131,8 @@ export default function UploadNotice() {
       setSiblingOrgUnitIds(siblingIds);
       setAssignedOrgUnitIds(data.assignedOrgUnitIds);
       setOrgUnitTree(data.tree);
-
-      // Default checked: assigned + ancestors
       setSelectedOrgUnitIds([...data.assignedOrgUnitIds, ...ancestorIds]);
     };
-
     fetchOrgUnits();
   }, []);
 
@@ -172,15 +156,11 @@ export default function UploadNotice() {
         {units.map((unit) => {
           const hasChildren = !!unit.children?.length;
           const isExpanded = expandedNodes.has(unit.id);
-
           const isAssigned = assignedOrgUnitIds.includes(unit.id);
           const isAncestor = ancestorOrgUnitIds.has(unit.id);
           const isDescendant = descendantOrgUnitIds.has(unit.id);
-
-          // checked: assigned, ancestor, or user-selected descendant
           const isChecked =
             isAssigned || isAncestor || selectedOrgUnitIds.includes(unit.id);
-          // disabled: assigned or ancestor or NOT a descendant
           const isSibling = siblingOrgUnitIds.has(unit.id);
           const isDisabled =
             isAssigned || isAncestor || isSibling || !isDescendant;
@@ -195,7 +175,6 @@ export default function UploadNotice() {
                 ) : (
                   <div className="w-4 h-4" />
                 )}
-
                 <Checkbox
                   checked={isChecked}
                   disabled={isDisabled}
@@ -209,7 +188,6 @@ export default function UploadNotice() {
                   {unit.name}
                 </span>
               </div>
-
               {hasChildren && isExpanded && (
                 <OrgUnitCheckboxTree units={unit.children!} />
               )}
@@ -222,51 +200,59 @@ export default function UploadNotice() {
 
   const handleSubmit = async () => {
     if (!title || !date || selectedOrgUnitIds.length === 0) {
-      return alert("Please fill all required fields");
+      toast.error("Please fill all required fields.");
+      return;
     }
 
-    // Find the assignedOrgUnitId from selectedOrgUnitIds
     const validAssignedId = selectedOrgUnitIds.find((id) =>
       assignedOrgUnitIds.includes(id)
     );
 
     if (!validAssignedId) {
-      return alert("Please select one assigned org unit to post notice");
+      toast.error("Please select one assigned org unit to post notice.");
+      return;
     }
 
-    let fileUrl = "";
-    if (file) {
-      const form = new FormData();
-      form.append("file", file);
-      const r = await fetch("/api/upload", { method: "POST", body: form });
-      const d = await r.json();
-      if (!r.ok) return alert("File upload failed.");
-      fileUrl = d.url;
-    }
+    setIsSubmitting(true);
+    try {
+      let fileUrl = "";
+      if (file) {
+        const form = new FormData();
+        form.append("file", file);
+        const r = await fetch("/api/upload", { method: "POST", body: form });
+        const d = await r.json();
+        if (!r.ok) throw new Error("File upload failed.");
+        fileUrl = d.url;
+      }
 
-    const res = await fetch("/api/notices", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        description,
-        orgUnitId: validAssignedId, // ✅ Only one org unit (assigned)
-        expiredAt: date.toISOString(),
-        fileUrl,
-      }),
-    });
+      const res = await fetch("/api/notices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description,
+          orgUnitId: validAssignedId,
+          expiredAt: date.toISOString(),
+          fileUrl,
+        }),
+      });
 
-    if (res.ok) {
-      alert("Notice posted!");
-      setTitle("");
-      setDescription("");
-      setFile(null);
-      setDate(undefined);
-      setPreview(null);
-      setSelectedOrgUnitIds([]);
-    } else {
-      const error = await res.json();
-      alert(`Failed to post notice: ${error.error}`);
+      if (res.ok) {
+        toast.success("Notice posted successfully.");
+        setTitle("");
+        setDescription("");
+        setFile(null);
+        setDate(undefined);
+        setPreview(null);
+        setSelectedOrgUnitIds([]);
+      } else {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to post notice.");
+      }
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -346,7 +332,16 @@ export default function UploadNotice() {
           </PopoverContent>
         </Popover>
       </div>
-      <Button onClick={handleSubmit}>Submit Notice</Button>
+      <Button onClick={handleSubmit} disabled={isSubmitting}>
+        {isSubmitting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Posting...
+          </>
+        ) : (
+          "Submit Notice"
+        )}
+      </Button>
     </div>
   );
 }

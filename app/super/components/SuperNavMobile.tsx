@@ -4,13 +4,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, User, Settings, Building } from "lucide-react";
+import {
+  LayoutDashboard,
+  User,
+  Settings,
+  Building,
+  Tag,
+  Paperclip,
+} from "lucide-react";
 
 const navItems = [
   { name: "Dashboard", href: "/super", icon: LayoutDashboard },
   { name: "Organisation", href: "/super/orgs", icon: Building },
   { name: "Users", href: "/super/users", icon: User },
-  { name: "Notices", href: "/super/notices", icon: User },
+  { name: "Notices", href: "/super/notices", icon: Tag },
+  { name: "Proposals", href: "/super/proposals", icon: Paperclip },
   { name: "Settings", href: "/super/settings", icon: Settings },
 ];
 

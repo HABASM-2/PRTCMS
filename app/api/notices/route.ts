@@ -52,3 +52,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const query = searchParams.get("q") || "";
+  const page = parseInt(searchParams.get("page") || "1");
+  const pageSize = parseInt(searchParams.get("pageSize") || "10");
+
+  const where = {
+    title: {
+      contains: query,
+      mode: "insensitive",
+    },
+  };
+
+  const [notices, total] = await prisma.$transaction([
+    prisma.proposalNotice.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { orgUnit: true, createdBy: true },
+    }),
+    prisma.proposalNotice.count({ where }),
+  ]);
+
+  return Response.json({ notices, total });
+}

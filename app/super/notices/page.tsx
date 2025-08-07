@@ -1,12 +1,17 @@
-// app/notices/page.tsx
-
-"use client";
-
+// app/notices/page.tsx (Server Component – remove "use client")
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import UploadNotice from "./components/UploadNotice";
-import EditNotices from "./components/EditNotices";
+import ProposalList from "./components/ProposalList";
+import { auth } from "@/lib/auth";
 
-export default function NoticePage() {
+export default async function NoticePage() {
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    return <div className="p-6">You must be logged in to view this page.</div>;
+  }
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Manage Proposal Notices</h1>
@@ -18,14 +23,13 @@ export default function NoticePage() {
         </TabsList>
 
         <TabsContent value="upload">
-          <UploadNotice />
+          <UploadNotice userId={userId} />
         </TabsContent>
 
         <TabsContent value="edit">
-          <EditNotices />
+          <ProposalList userId={userId} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
-``;
