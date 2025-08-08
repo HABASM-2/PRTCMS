@@ -137,9 +137,10 @@ model SubmitProposal {
   orgUnit   OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
   orgUnitId Int
 
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  ProposalReview ProposalReview[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions ProposalVersion[]
 
   @@unique([submittedById, noticeId]) // prevent duplicate submissions
   @@index([submittedById])
@@ -147,10 +148,30 @@ model SubmitProposal {
   @@index([orgUnitId])
 }
 
+model ProposalVersion {
+  id               Int            @id @default(autoincrement())
+  submitProposal   SubmitProposal @relation(fields: [submitProposalId], references: [id], onDelete: Cascade)
+  submitProposalId Int
+
+  versionNumber Int // e.g., 1, 2, 3 for each round/version
+  title         String
+  description   String?
+  participants  String[]
+  fileUrl       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reviews ProposalReview[]
+
+  @@unique([submitProposalId, versionNumber])
+  @@index([submitProposalId])
+}
+
 model ProposalReview {
-  id         Int            @id @default(autoincrement())
-  proposal   SubmitProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  proposalId Int
+  id                Int             @id @default(autoincrement())
+  proposalVersion   ProposalVersion @relation(fields: [proposalVersionId], references: [id], onDelete: Cascade)
+  proposalVersionId Int
 
   reviewer   User @relation(fields: [reviewerId], references: [id])
   reviewerId Int
@@ -159,7 +180,8 @@ model ProposalReview {
   comments  String?
   createdAt DateTime     @default(now())
 
-  @@index([proposalId])
+  @@unique([proposalVersionId, reviewerId])
+  @@index([proposalVersionId])
   @@index([reviewerId])
 }
 

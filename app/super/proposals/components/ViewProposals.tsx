@@ -82,13 +82,17 @@ export default function ViewProposals({ userId }: { userId: number }) {
     const reviewerIds = selected.map((r) => r.id);
 
     try {
-      const res = await fetch(`/api/proposals/${proposalId}/assign-reviewers`, {
+      const res = await fetch(`/api/proposals/${proposalId}/assignrev`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reviewerIds }),
       });
 
-      if (!res.ok) throw new Error("Failed to assign reviewers");
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Assign reviewers failed:", res.status, errorText);
+        throw new Error("Failed to assign reviewers");
+      }
 
       alert("Reviewers assigned successfully");
       setAssigningProposalId(null);

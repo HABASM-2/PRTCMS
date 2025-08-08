@@ -112,7 +112,7 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
   useEffect(() => {
     const fetchOrgUnits = async () => {
       const res = await fetch(
-        `/api/orgunits/org-units/user-orgunit-tree?id=37`
+        `/api/orgunits/org-units/user-orgunit-tree?id=${userId}`
       );
       const data = await res.json();
       if (!res.ok) {
