@@ -38,6 +38,7 @@ interface User {
   username: string;
   roles?: { id: number; name: string }[];
   organisations: { id: number; name: string }[];
+  createdById: String;
   UserOrgUnit?: {
     orgUnit: { id: number; name: string; parentId?: number | null };
   }[];
