@@ -73,7 +73,7 @@ export default async function SuperLayout({ children }: Props) {
         </DropdownMenu>
 
         {/* Navigation */}
-        <SuperNavDesktop />
+        <SuperNavDesktop roles={roles} />
 
         {/* Bottom Controls */}
         <div className="mt-auto hidden md:flex items-center space-x-3 justify-between">
@@ -120,7 +120,7 @@ export default async function SuperLayout({ children }: Props) {
       </header>
 
       {/* Mobile Nav */}
-      <SuperNavMobile />
+      <SuperNavMobile roles={roles} />
 
       {/* Main Content */}
       <main className="flex-1 p-6">

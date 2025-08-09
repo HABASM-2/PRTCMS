@@ -18,8 +18,21 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast } from "sonner";
+import { StopCircle } from "lucide-react";
 
 type ReviewStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "NEEDS_MODIFICATION";
+
+interface FinalDecision {
+  status: ReviewStatus; // same enum as ReviewStatus
+  reason?: string;
+  decidedBy: {
+    id: number;
+    fullName: string;
+  };
+  decidedAt: string;
+}
 
 interface Review {
   id: number;
@@ -48,6 +61,7 @@ interface Proposal {
   orgUnitName: string;
   createdAt: string;
   versions: ProposalVersion[];
+  finalDecision?: FinalDecision | null;
 }
 
 interface Props {
@@ -82,6 +96,10 @@ export default function ReviewProposals({ userId }: Props) {
   // Find current user's review for selected version if any
   const existingReview =
     selectedVersion?.reviews.find((r) => r.reviewerId === userId) || null;
+
+  const isFinalized =
+    selectedProposal?.finalDecision?.status === "ACCEPTED" ||
+    selectedProposal?.finalDecision?.status === "REJECTED";
 
   async function fetchProposals() {
     setLoading(true);
@@ -249,6 +267,16 @@ export default function ReviewProposals({ userId }: Props) {
                   >
                     Review
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      toast(`Action stopped for proposal "${p.title}"`)
+                    }
+                    aria-label={`Stop action for proposal ${p.title}`}
+                  >
+                    <StopCircle className="h-5 w-5 text-red-600" />
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -281,8 +309,8 @@ export default function ReviewProposals({ userId }: Props) {
 
       {/* Review Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-0">
+          <DialogHeader className="px-6 py-4">
             <DialogTitle>Review Proposal</DialogTitle>
             <DialogDescription>
               Review and update the status, add comments, and optionally upload
@@ -290,170 +318,171 @@ export default function ReviewProposals({ userId }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          {selectedProposal && selectedVersion && (
-            <>
-              {/* Proposal Version Details */}
-              <div className="mb-6 p-4 border rounded bg-gray-50 dark:bg-gray-900">
-                {selectedVersion && (
-                  <div className="mb-6 p-4 border rounded bg-gray-50 dark:bg-gray-900">
-                    {/* Title */}
-                    <h3 className="text-lg font-semibold mb-2">
-                      {selectedVersion.title}
-                    </h3>
+          {/* Wrap entire modal body in ScrollArea with max height */}
+          <ScrollArea className="max-h-[600px] px-6 pb-6">
+            {selectedProposal && selectedVersion && (
+              <>
+                {/* Proposal Version Details */}
+                <div className="mb-6 p-4 border rounded bg-gray-50 dark:bg-gray-900">
+                  {/* Title */}
+                  <h3 className="text-lg font-semibold mb-2">
+                    {selectedVersion.title}
+                  </h3>
 
-                    {/* Description */}
-                    {selectedVersion.description && (
-                      <p className="mb-4 whitespace-pre-wrap">
-                        {selectedVersion.description}
-                      </p>
-                    )}
+                  {/* Description */}
+                  {selectedVersion.description && (
+                    <p className="mb-4 whitespace-pre-wrap">
+                      {selectedVersion.description}
+                    </p>
+                  )}
 
-                    {/* Participants */}
-                    {selectedVersion.participants &&
-                      selectedVersion.participants.length > 0 && (
-                        <p className="mb-4">
-                          <strong>Participants:</strong>{" "}
-                          {selectedVersion.participants.join(", ")}
-                        </p>
-                      )}
-
-                    {/* Attachment (fileUrl) */}
-                    {selectedVersion.fileUrl && (
+                  {/* Participants */}
+                  {selectedVersion.participants &&
+                    selectedVersion.participants.length > 0 && (
                       <p className="mb-4">
-                        <strong>Attachment:</strong>{" "}
-                        <a
-                          href={selectedVersion.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 underline hover:text-blue-800"
-                        >
-                          View File
-                        </a>
+                        <strong>Participants:</strong>{" "}
+                        {selectedVersion.participants.join(", ")}
                       </p>
                     )}
-                  </div>
-                )}
-              </div>
 
-              {/* Versions selector */}
-              <div className="mb-4">
-                <label className="block mb-1 font-medium">Select Version</label>
-                <Select
-                  value={selectedVersionId?.toString() || ""}
-                  onValueChange={(v) => onVersionChange(parseInt(v))}
-                >
-                  <SelectTrigger className="w-full">
-                    <span>
-                      {selectedVersion
-                        ? `v${selectedVersion.versionNumber} - ${new Date(
-                            selectedVersion.createdAt
-                          ).toLocaleDateString()}`
-                        : "Select version"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectedProposal.versions.map((version) => (
-                      <SelectItem
-                        key={version.id}
-                        value={version.id.toString()}
+                  {/* Attachment (fileUrl) */}
+                  {selectedVersion.fileUrl && (
+                    <p className="mb-4">
+                      <strong>Attachment:</strong>{" "}
+                      <a
+                        href={selectedVersion.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline hover:text-blue-800"
                       >
-                        v{version.versionNumber} -{" "}
-                        {new Date(version.createdAt).toLocaleDateString()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                        View File
+                      </a>
+                    </p>
+                  )}
+                </div>
 
-              {/* Existing Reviews: only current user's review */}
-              <div className="mb-4">
-                <h4 className="font-semibold mb-2">Your Review</h4>
-                {!existingReview && (
-                  <p className="italic text-gray-500 dark:text-gray-400">
-                    You have not reviewed this version yet.
-                  </p>
-                )}
-                {existingReview && (
-                  <div className="p-3 rounded mb-3 border border-blue-500 bg-blue-50 dark:bg-blue-900">
-                    <p>
-                      <strong>Reviewer:</strong> {existingReview.reviewerName}
-                    </p>
-                    <p>
-                      <strong>Status:</strong>{" "}
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${getStatusBadgeClasses(
-                          existingReview.status
-                        )}`}
-                      >
-                        {existingReview.status.replace("_", " ")}
-                      </span>
-                    </p>
-                    <p>
-                      <strong>Comments:</strong>{" "}
-                      {existingReview.comments || <em>No comments</em>}
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Reviewed on{" "}
-                      {new Date(existingReview.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Review form for current user */}
-              <div className="space-y-4">
-                <div>
+                {/* Versions selector */}
+                <div className="mb-4">
                   <label className="block mb-1 font-medium">
-                    Your Review Status
+                    Select Version
                   </label>
                   <Select
-                    value={reviewStatus}
-                    onValueChange={(value) =>
-                      setReviewStatus(value as ReviewStatus)
-                    }
+                    value={selectedVersionId?.toString() || ""}
+                    onValueChange={(v) => onVersionChange(parseInt(v))}
                   >
                     <SelectTrigger className="w-full">
-                      <span>{reviewStatus}</span>
+                      <span>
+                        {selectedVersion
+                          ? `v${selectedVersion.versionNumber} - ${new Date(
+                              selectedVersion.createdAt
+                            ).toLocaleDateString()}`
+                          : "Select version"}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PENDING">Pending</SelectItem>
-                      <SelectItem value="ACCEPTED">Accepted</SelectItem>
-                      <SelectItem value="REJECTED">Rejected</SelectItem>
-                      <SelectItem value="NEEDS_MODIFICATION">
-                        Needs Modification
-                      </SelectItem>
+                      {selectedProposal.versions.map((version) => (
+                        <SelectItem
+                          key={version.id}
+                          value={version.id.toString()}
+                        >
+                          v{version.versionNumber} -{" "}
+                          {new Date(version.createdAt).toLocaleDateString()}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div>
-                  <label className="block mb-1 font-medium">
-                    Your Comments
-                  </label>
-                  <Textarea
-                    placeholder="Add your comments"
-                    value={comments}
-                    onChange={(e) => setComments(e.target.value)}
-                    rows={4}
-                  />
-                </div>
-
-                <div>
-                  <label className="block mb-1 font-medium">
-                    Upload File (optional)
-                  </label>
-                  <input type="file" onChange={handleFileChange} />
-                  {file && (
-                    <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                      {file.name}
+                {/* Existing Reviews: only current user's review */}
+                <div className="mb-4">
+                  <h4 className="font-semibold mb-2">Your Review</h4>
+                  {!existingReview && (
+                    <p className="italic text-gray-500 dark:text-gray-400">
+                      You have not reviewed this version yet.
                     </p>
                   )}
+                  {existingReview && (
+                    <div className="p-3 rounded mb-3 border border-blue-500 bg-blue-50 dark:bg-blue-900">
+                      <p>
+                        <strong>Reviewer:</strong> {existingReview.reviewerName}
+                      </p>
+                      <p>
+                        <strong>Status:</strong>{" "}
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-xs font-semibold ${getStatusBadgeClasses(
+                            existingReview.status
+                          )}`}
+                        >
+                          {existingReview.status.replace("_", " ")}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>Comments:</strong>{" "}
+                        {existingReview.comments || <em>No comments</em>}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Reviewed on{" "}
+                        {new Date(existingReview.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </>
-          )}
 
-          <DialogFooter className="mt-4 flex justify-end gap-2">
+                {/* Review form for current user */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block mb-1 font-medium">
+                      Your Review Status
+                    </label>
+                    <Select
+                      value={reviewStatus}
+                      onValueChange={(value) =>
+                        setReviewStatus(value as ReviewStatus)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <span>{reviewStatus}</span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PENDING">Pending</SelectItem>
+                        <SelectItem value="ACCEPTED">Accepted</SelectItem>
+                        <SelectItem value="REJECTED">Rejected</SelectItem>
+                        <SelectItem value="NEEDS_MODIFICATION">
+                          Needs Modification
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">
+                      Your Comments
+                    </label>
+                    <Textarea
+                      placeholder="Add your comments"
+                      value={comments}
+                      onChange={(e) => setComments(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-medium">
+                      Upload File (optional)
+                    </label>
+                    <input type="file" onChange={handleFileChange} />
+                    {file && (
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                        {file.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </ScrollArea>
+
+          <DialogFooter className="mt-4 flex justify-end gap-2 px-6 py-4">
             <Button
               variant="outline"
               onClick={() => setOpen(false)}
@@ -461,8 +490,15 @@ export default function ReviewProposals({ userId }: Props) {
             >
               Cancel
             </Button>
-            <Button onClick={handleSubmitReview} disabled={loading}>
-              {loading ? "Submitting..." : "Submit Review"}
+            <Button
+              onClick={handleSubmitReview}
+              disabled={loading || isFinalized}
+            >
+              {loading
+                ? "Submitting..."
+                : isFinalized
+                ? "Reviewed"
+                : "Submit Review"}
             </Button>
           </DialogFooter>
         </DialogContent>

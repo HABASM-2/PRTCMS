@@ -18,13 +18,6 @@ export async function GET(request: Request) {
 
     const skip = (page - 1) * pageSize;
 
-    // Fetch proposals where the user is assigned as reviewer
-    // Let's define assigned as proposals with at least one version with a review assigned to the user or where user has no review yet but can review (e.g. no review record)
-    // For simplicity, fetch proposals where user is reviewer on at least one version OR proposals with versions without a review by the user (means user can review)
-    // You may want to add explicit assignment table in future.
-
-    // Filter proposals by title using `filter` param
-
     // Count total matching proposals
     const totalCount = await prisma.submitProposal.count({
       where: {
@@ -125,6 +118,16 @@ export async function GET(request: Request) {
             name: true,
           },
         },
+        finalDecision: {  // <-- add this include to fetch final decision
+          include: {
+            decidedBy: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -140,8 +143,8 @@ export async function GET(request: Request) {
         versionNumber: v.versionNumber,
         title: v.title,
         description: v.description,
-        participants: v.participants, // <--- add this
-        fileUrl: v.fileUrl,           // <--- add this
+        participants: v.participants,
+        fileUrl: v.fileUrl,
         createdAt: v.createdAt.toISOString(),
         reviews: v.reviews.map((r) => ({
           id: r.id,
@@ -152,6 +155,17 @@ export async function GET(request: Request) {
           createdAt: r.createdAt.toISOString(),
         })),
       })),
+      finalDecision: p.finalDecision
+        ? {
+            status: p.finalDecision.status,
+            reason: p.finalDecision.reason,
+            decidedBy: {
+              id: p.finalDecision.decidedBy.id,
+              fullName: p.finalDecision.decidedBy.fullName,
+            },
+            decidedAt: p.finalDecision.decidedAt.toISOString(),
+          }
+        : null,
     }));
 
     return NextResponse.json({

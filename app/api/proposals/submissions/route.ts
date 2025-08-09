@@ -15,45 +15,37 @@ export async function GET(request: Request) {
       where: { submittedById: userId },
       orderBy: { updatedAt: "desc" },
       include: {
-        // Fetch all versions for history (including reviews and reviewers)
         versions: {
           orderBy: { versionNumber: "desc" },
           include: {
             reviews: {
               include: {
-                reviewer: true, // to get reviewer's fullName
+                reviewer: true,
               },
             },
+          },
+        },
+        finalDecision: {
+          include: {
+            decidedBy: true,
           },
         },
       },
     });
 
     const mapped = submissions.map((sub) => {
-      const latestVersion = sub.versions[0];
-
-      // Determine overall status based on latest version reviews
-      let status = "PENDING";
-      if (latestVersion) {
-        for (const review of latestVersion.reviews) {
-          if (review.status === "REJECTED") {
-            status = "REJECTED";
-            break;
-          } else if (review.status === "ACCEPTED") {
-            status = "ACCEPTED";
-          }
-        }
-      }
+      // Use final decision status if available, else default to PENDING
+      const status = sub.finalDecision ? sub.finalDecision.status : "PENDING";
 
       return {
         id: sub.id,
         title: sub.title,
         status,
         updatedAt: sub.updatedAt.toISOString(),
-        // Latest version fields for pre-filling
-        description: latestVersion?.description || null,
-        participants: latestVersion?.participants || [],
-        fileUrl: latestVersion?.fileUrl || null,
+
+        description: sub.versions[0]?.description || null,
+        participants: sub.versions[0]?.participants || [],
+        fileUrl: sub.versions[0]?.fileUrl || null,
         versions: sub.versions.map((version) => ({
           versionNumber: version.versionNumber,
           title: version.title,
@@ -70,6 +62,15 @@ export async function GET(request: Request) {
             createdAt: review.createdAt.toISOString(),
           })),
         })),
+
+        finalDecision: sub.finalDecision
+          ? {
+              status: sub.finalDecision.status,
+              reason: sub.finalDecision.reason,
+              decidedBy: sub.finalDecision.decidedBy?.fullName || "Unknown",
+              decidedAt: sub.finalDecision.decidedAt.toISOString(),
+            }
+          : null,
       };
     });
 

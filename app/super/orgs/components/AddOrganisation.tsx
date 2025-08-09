@@ -34,7 +34,11 @@ type Org = {
   };
 };
 
-export default function AddOrganisation() {
+type AddOrganisationProps = {
+  userRoles: string[];
+};
+
+export default function AddOrganisation({ userRoles }: AddOrganisationProps) {
   const { data: session } = useSession();
 
   const [name, setName] = useState("");
@@ -63,6 +67,10 @@ export default function AddOrganisation() {
   const [statusLoading, setStatusLoading] = useState(false);
 
   const [deleteLoadingId, setDeleteLoadingId] = useState<number | null>(null);
+
+  const isSuperUser = userRoles.includes("super");
+  const hasOneOrMoreOrgs = orgs.length >= 1;
+  const canAddOrganisation = isSuperUser || !hasOneOrMoreOrgs;
 
   const pageSize = 5;
 
@@ -205,13 +213,21 @@ export default function AddOrganisation() {
           onChange={(e) => setDescription(e.target.value)}
         />
         <div className="flex gap-4 items-center">
-          <Button onClick={handleSubmit} disabled={loading}>
+          <Button
+            onClick={handleSubmit}
+            disabled={loading || !canAddOrganisation}
+          >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               "Add Organisation"
             )}
           </Button>
+          {!canAddOrganisation && !isSuperUser && (
+            <p className="text-sm text-red-600 mt-2">
+              One organisation is allowed to add!
+            </p>
+          )}
           {error && <span className="text-red-500 text-sm">{error}</span>}
         </div>
       </div>

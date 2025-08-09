@@ -46,6 +46,7 @@ model User {
   ProposalNotice ProposalNotice[]
   SubmitProposal SubmitProposal[]
   ProposalReview ProposalReview[]
+  FinalDecision  FinalDecision[]
 }
 
 model ActivityLog {
@@ -140,12 +141,25 @@ model SubmitProposal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  versions ProposalVersion[]
+  versions      ProposalVersion[]
+  finalDecision FinalDecision?
 
   @@unique([submittedById, noticeId]) // prevent duplicate submissions
   @@index([submittedById])
   @@index([noticeId])
   @@index([orgUnitId])
+}
+
+model FinalDecision {
+  id               Int            @id @default(autoincrement())
+  submitProposal   SubmitProposal @relation(fields: [submitProposalId], references: [id], onDelete: Cascade)
+  submitProposalId Int            @unique
+
+  status      ReviewStatus
+  reason      String?
+  decidedBy   User         @relation(fields: [decidedById], references: [id])
+  decidedById Int
+  decidedAt   DateTime     @default(now())
 }
 
 model ProposalVersion {

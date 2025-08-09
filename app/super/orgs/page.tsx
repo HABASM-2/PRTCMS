@@ -1,53 +1,25 @@
-"use client";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth"; // your session fetching logic
+import Page from "./components/Entry"; // your current client component with tabs
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building, User as UserIcon } from "lucide-react";
-import { useState } from "react";
-import AddOrganisation from "./components/AddOrganisation";
-import OrgStructureEditor from "./components/OrgStructureEditor";
+export default async function OrgPageWrapper() {
+  const session = await auth();
 
-export default function Page() {
-  const [orgTab, setOrgTab] = useState("add");
-  const [refreshKey, setRefreshKey] = useState(0);
+  if (!session) {
+    redirect("/login");
+  }
 
-  return (
-    <div className="p-6">
-      <Tabs defaultValue="organisation" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="organisation" className="flex items-center gap-2">
-            <Building className="w-4 h-4" />
-            Organisation
-          </TabsTrigger>
-        </TabsList>
+  const userRoles = session.user.roles ?? [];
 
-        {/* Organisation Tabs */}
-        <TabsContent value="organisation">
-          <Tabs defaultValue={orgTab} onValueChange={setOrgTab}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="add">Add Organisation</TabsTrigger>
-              <TabsTrigger value="structure">Structure</TabsTrigger>
-            </TabsList>
+  // Roles allowed to access organisation page
+  const allowedRoles = ["admin", "super", "org-manager"];
 
-            <TabsContent value="add">
-              <div className="p-4 border rounded-xl shadow-sm bg-muted">
-                <h2 className="text-lg font-semibold mb-2">Add Organisation</h2>
-                {/* Add Organisation form here */}
-                <AddOrganisation />
-              </div>
-            </TabsContent>
+  // Check if user has at least one allowed role
+  const isAllowed = userRoles.some((role) => allowedRoles.includes(role));
 
-            <TabsContent value="structure">
-              <div className="p-4 border rounded-xl shadow-sm bg-muted">
-                <h2 className="text-lg font-semibold mb-2">
-                  Organisation Structure
-                </h2>
-                {/* Tree structure or layout here */}
-                <OrgStructureEditor />
-              </div>
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+  if (!isAllowed) {
+    redirect("/forbidden"); // or redirect("/403") if you want an explicit "Forbidden" page
+  }
+
+  return <Page userRoles={userRoles} />;
 }

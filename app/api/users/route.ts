@@ -1,12 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import bcrypt from "bcryptjs";
-import { Loader2 } from "lucide-react";
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const createdById = Number(session.user.id);
+
     const body = await req.json();
     const {
       fullName,
@@ -17,7 +22,6 @@ export async function POST(req: Request) {
       orgUnitIds,
       roleIds, // this is expected to be a multipple role idD
       managerTag,
-      createdById,
     } = body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -122,14 +126,20 @@ export async function GET(req: Request) {
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where: whereClause,
-      include: {
+      select: { // ✅ switched to select so we explicitly include createdById
+        id: true,
+        fullName: true,
+        email: true,
+        username: true,
+        createdById: true, // ✅ now included
         roles: { select: { id: true, name: true } },
         organisations: { select: { id: true, name: true } },
         UserOrgUnit: {
-          include: {
+          select: {
             orgUnit: { select: { id: true, name: true, parentId: true } },
           },
         },
+        createdAt: true,
       },
       orderBy: { createdAt: "desc" },
       skip,

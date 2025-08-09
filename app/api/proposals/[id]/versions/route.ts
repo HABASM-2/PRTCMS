@@ -1,0 +1,75 @@
+// /app/api/proposals/[id]/versions/route.ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const proposalId = parseInt(params.id, 10);
+    if (isNaN(proposalId)) {
+      return NextResponse.json({ error: "Invalid proposal ID" }, { status: 400 });
+    }
+
+    const proposal = await prisma.submitProposal.findUnique({
+      where: { id: proposalId },
+      include: {
+        submittedBy: { select: { fullName: true } },
+        orgUnit: { select: { name: true } },
+        versions: {
+          orderBy: { versionNumber: "asc" },
+          include: {
+            reviews: {
+              include: {
+                reviewer: { select: { id: true, fullName: true } },
+              },
+              orderBy: { createdAt: "asc" },
+            },
+          },
+        },
+      },
+    });
+
+    if (!proposal) {
+      return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
+    }
+
+    const formatted = {
+      id: proposal.id,
+      title: proposal.title,
+      description: proposal.description,
+      participants: proposal.participants,
+      fileUrl: proposal.fileUrl,
+      submittedBy: proposal.submittedBy.fullName,
+      orgUnit: proposal.orgUnit.name,
+      submittedAt: proposal.createdAt.toISOString(),
+      versions: proposal.versions.map((v) => ({
+        versionNumber: v.versionNumber,
+        title: v.title,
+        description: v.description,
+        participants: v.participants,
+        fileUrl: v.fileUrl,
+        createdAt: v.createdAt.toISOString(),
+        reviews: v.reviews.map((r) => ({
+          reviewerId: r.reviewerId,
+          reviewerName: r.reviewer.fullName,
+          status: r.status,
+          comments: r.comments,
+        })),
+      })),
+    };
+
+    return NextResponse.json(formatted);
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Failed to fetch proposal versions" }, { status: 500 });
+  }
+}
