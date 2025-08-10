@@ -132,6 +132,7 @@ export async function GET(req: Request) {
         email: true,
         username: true,
         createdById: true, // ✅ now included
+        managerTag: true,
         roles: { select: { id: true, name: true } },
         organisations: { select: { id: true, name: true } },
         UserOrgUnit: {

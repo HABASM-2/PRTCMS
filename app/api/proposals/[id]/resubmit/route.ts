@@ -43,8 +43,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
       ) || 0;
     const nextVersionNumber = latestVersionNumber + 1;
 
-    // Create new ProposalVersion linked to the SubmitProposal
-    await prisma.proposalVersion.create({
+        // Create new ProposalVersion linked to the SubmitProposal
+        // After creating new ProposalVersion
+    const newVersion = await prisma.proposalVersion.create({
       data: {
         submitProposalId,
         versionNumber: nextVersionNumber,
@@ -54,6 +55,25 @@ export async function POST(request: Request, { params }: { params: { id: string 
         fileUrl,
       },
     });
+
+    // Copy latest version's reviewers to new version if exists
+    const latestVersion = existingSubmitProposal.versions.reduce((max, v) => (v.versionNumber > max.versionNumber ? v : max), existingSubmitProposal.versions[0]);
+
+    if (latestVersion) {
+      const latestReviews = await prisma.proposalReview.findMany({
+        where: { proposalVersionId: latestVersion.id },
+      });
+
+      await prisma.proposalReview.createMany({
+        data: latestReviews.map((r) => ({
+          proposalVersionId: newVersion.id,
+          reviewerId: r.reviewerId,
+          status: r.status,
+          comments: r.comments,
+          createdAt: r.createdAt,
+        })),
+      });
+    }
 
     // Update updatedAt timestamp on SubmitProposal
     await prisma.submitProposal.update({

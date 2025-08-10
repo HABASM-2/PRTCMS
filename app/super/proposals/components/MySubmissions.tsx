@@ -67,6 +67,26 @@ export default function MySubmissions({ userId }: Props) {
     null
   );
 
+  function latestVersionNeedsModification(submission: Submission): boolean {
+    if (!submission.versions.length) return false;
+
+    // Find latest version by highest versionNumber (assuming sorted descending)
+    const latestVersion = submission.versions.reduce((prev, current) => {
+      return current.versionNumber > prev.versionNumber ? current : prev;
+    }, submission.versions[0]);
+
+    if (!latestVersion.reviews.length) return false;
+
+    // Find latest review by createdAt date
+    const latestReview = latestVersion.reviews.reduce((prev, current) => {
+      return new Date(current.createdAt) > new Date(prev.createdAt)
+        ? current
+        : prev;
+    }, latestVersion.reviews[0]);
+
+    return latestReview.status.toUpperCase() === "NEEDS_MODIFICATION";
+  }
+
   async function fetchSubmissions() {
     setLoading(true);
     try {
@@ -150,7 +170,7 @@ export default function MySubmissions({ userId }: Props) {
                     <Button size="sm" onClick={() => setViewingSubmission(sub)}>
                       View Details
                     </Button>
-                    {sub.status === "NEEDS_MODIFICATION" && (
+                    {latestVersionNeedsModification(sub) && (
                       <Button
                         size="sm"
                         onClick={() => {

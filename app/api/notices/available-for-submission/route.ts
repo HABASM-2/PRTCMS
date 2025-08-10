@@ -22,24 +22,25 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         title: true,
+        description: true,
+        expiredAt: true,
+        fileUrl: true,
         orgUnitId: true,
         orgUnit: {
           select: {
-            name: true, // orgUnit name
-            organisation: {
-              select: {
-                name: true, // organisation name
-              },
-            },
+            name: true,
+            organisation: { select: { name: true } },
           },
         },
       },
     });
 
-    // Map to flatten the structure with orgUnitName and orgName at root level
     const formatted = availableNotices.map((notice) => ({
       id: notice.id,
       title: notice.title,
+      description: notice.description,
+      expiredAt: notice.expiredAt,
+      fileUrl: notice.fileUrl,
       orgUnitId: notice.orgUnitId,
       orgUnitName: notice.orgUnit.name,
       orgName: notice.orgUnit.organisation.name,

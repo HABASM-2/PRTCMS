@@ -286,18 +286,55 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
           onChange={(e) => {
             const f = e.target.files?.[0] || null;
             setFile(f);
-            setPreview(
-              f?.type.startsWith("image/") ? URL.createObjectURL(f) : null
-            );
+
+            if (!f) {
+              setPreview(null);
+              return;
+            }
+
+            if (f.type.startsWith("image/")) {
+              // ✅ Image preview
+              setPreview(URL.createObjectURL(f));
+            } else if (f.type === "application/pdf") {
+              // ✅ PDF preview
+              setPreview(URL.createObjectURL(f));
+            } else if (
+              f.name.endsWith(".doc") ||
+              f.name.endsWith(".docx") ||
+              f.type.includes("word")
+            ) {
+              // ⚠ DOC/DOCX preview using Google Docs Viewer
+              const blobUrl = URL.createObjectURL(f);
+              setPreview(
+                `https://docs.google.com/viewer?url=${blobUrl}&embedded=true`
+              );
+            } else {
+              setPreview(null);
+            }
           }}
         />
+
         {file && (
           <div className="mt-2">
-            {preview ? (
+            {file.type.startsWith("image/") ? (
               <img
-                src={preview}
+                src={preview!}
                 alt="Preview"
                 className="max-w-xs max-h-64 rounded border"
+              />
+            ) : file.type === "application/pdf" ? (
+              <iframe
+                src={preview!}
+                width="100%"
+                height="400"
+                className="border rounded"
+              />
+            ) : file.name.endsWith(".doc") || file.name.endsWith(".docx") ? (
+              <iframe
+                src={preview!}
+                width="100%"
+                height="400"
+                className="border rounded"
               />
             ) : (
               <p className="text-sm text-muted-foreground">
