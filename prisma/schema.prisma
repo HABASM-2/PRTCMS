@@ -118,6 +118,11 @@ model ProposalNotice {
   createdAt      DateTime         @default(now())
   SubmitProposal SubmitProposal[]
 
+  type     NoticeType @default(JUST_NOTICE)
+  isActive Boolean    @default(true)
+
+  hidden Boolean @default(false)
+
   @@index([orgUnitId])
   @@index([createdById])
 }
@@ -204,4 +209,10 @@ enum ReviewStatus {
   ACCEPTED
   REJECTED
   NEEDS_MODIFICATION
+}
+
+enum NoticeType {
+  JUST_NOTICE
+  CONCEPT_NOTE
+  PROPOSAL
 }

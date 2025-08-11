@@ -165,6 +165,8 @@ export default function ProposalList({ userId }: ProposalListProps) {
               <TableHead>Org Unit</TableHead>
               <TableHead>Created By</TableHead>
               <TableHead>Created At</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Active</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -190,6 +192,8 @@ export default function ProposalList({ userId }: ProposalListProps) {
                   <TableCell>
                     {new Date(notice.createdAt).toLocaleString()}
                   </TableCell>
+                  <TableCell>{notice.type}</TableCell>
+                  <TableCell>{notice.isActive ? "Yes" : "No"}</TableCell>
                   <TableCell className="flex gap-2">
                     {/* View Button */}
                     <Button

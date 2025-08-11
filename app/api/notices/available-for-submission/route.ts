@@ -15,6 +15,9 @@ export async function GET(req: NextRequest) {
     const availableNotices = await prisma.proposalNotice.findMany({
       where: {
         expiredAt: { gt: now },
+        isActive: true,
+        hidden: false, 
+        type: { in: ["CONCEPT_NOTE", "PROPOSAL"] },
         SubmitProposal: {
           none: { submittedById: userId },
         },
@@ -26,6 +29,7 @@ export async function GET(req: NextRequest) {
         expiredAt: true,
         fileUrl: true,
         orgUnitId: true,
+        type: true,
         orgUnit: {
           select: {
             name: true,
@@ -42,6 +46,7 @@ export async function GET(req: NextRequest) {
       expiredAt: notice.expiredAt,
       fileUrl: notice.fileUrl,
       orgUnitId: notice.orgUnitId,
+      type: notice.type, 
       orgUnitName: notice.orgUnit.name,
       orgName: notice.orgUnit.organisation.name,
     }));

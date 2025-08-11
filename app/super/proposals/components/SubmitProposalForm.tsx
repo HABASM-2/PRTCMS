@@ -14,6 +14,8 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 
+type NoticeType = "JUST_NOTICE" | "CONCEPT_NOTE" | "PROPOSAL";
+
 interface Notice {
   id: number;
   title: string;
@@ -23,6 +25,7 @@ interface Notice {
   orgUnitId: number;
   orgName: string;
   orgUnitName: string;
+  type: NoticeType | null;
 }
 
 interface SubmitProposalFormProps {
@@ -43,6 +46,12 @@ export default function SubmitProposalForm({
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingNotices, setIsLoadingNotices] = useState(true);
+
+  const TYPE_LABELS: Record<string, string> = {
+    JUST_NOTICE: "Just Notice",
+    CONCEPT_NOTE: "Concept Note",
+    PROPOSAL: "Proposal",
+  };
 
   useEffect(() => {
     const fetchNotices = async () => {
@@ -178,14 +187,14 @@ export default function SubmitProposalForm({
     <div className="flex flex-col md:flex-row gap-6">
       {/* LEFT: Form */}
       <div className="flex-1 max-w-xl space-y-4">
-        <h2 className="text-xl font-semibold">Submit Proposal</h2>
-
         {isLoadingNotices ? (
           <div className="p-4 text-muted-foreground">Loading notices...</div>
         ) : availableNotices.length > 0 ? (
           <>
             <div>
-              <Label>Select Notice</Label>
+              <Label className="m-2">
+                Available Notices For Submissions:- Select Notice
+              </Label>
               <Select
                 value={selectedNotice?.id.toString() || ""}
                 onValueChange={(value) => {
@@ -313,6 +322,12 @@ export default function SubmitProposalForm({
         <h3 className="text-lg font-semibold mb-2">Notice Preview</h3>
         {selectedNotice ? (
           <div className="space-y-2 text-sm">
+            <h1>
+              <strong>
+                Submissions of{" "}
+                {TYPE_LABELS[selectedNotice.type ?? ""] ?? "Unknown"}
+              </strong>
+            </h1>
             <p>
               <strong>Title:</strong> {selectedNotice.title}
             </p>

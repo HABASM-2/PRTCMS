@@ -12,6 +12,8 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       fileUrl: data.fileUrl,
       orgUnitId: data.orgUnitId,
       expiredAt: new Date(data.expiredAt),
+      type: data.type,         // <--- add type
+      isActive: data.isActive, // <--- add isActive
     },
   });
 
@@ -20,6 +22,9 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const id = parseInt(params.id);
-  await prisma.proposalNotice.delete({ where: { id } });
+  await prisma.proposalNotice.update({
+    where: { id },
+    data: { hidden: true },
+  });
   return new Response(null, { status: 204 });
 }

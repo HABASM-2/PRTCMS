@@ -9,6 +9,14 @@ import { CalendarIcon, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Popover,
   PopoverTrigger,
@@ -40,6 +48,8 @@ export default function EditNoticeForm({
     notice.orgUnitId
   );
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
+  const [type, setType] = useState(notice.type || "JUST_NOTICE");
+  const [isActive, setIsActive] = useState(notice.isActive ?? true);
 
   useEffect(() => {
     const fetchOrgUnits = async () => {
@@ -143,6 +153,8 @@ export default function EditNoticeForm({
           orgUnitId: selectedOrgUnitId,
           expiredAt: date.toISOString(),
           fileUrl: updatedFileUrl,
+          type, // <--- send type
+          isActive, // <--- send isActive
         }),
       });
 
@@ -162,6 +174,14 @@ export default function EditNoticeForm({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center space-x-2">
+        <Switch
+          checked={isActive}
+          onCheckedChange={setIsActive}
+          id="notice-active"
+        />
+        <Label htmlFor="notice-active">Active</Label>
+      </div>
       <div>
         <Label>Title</Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -180,6 +200,19 @@ export default function EditNoticeForm({
         ) : (
           <OrgUnitRadioTree units={orgUnitTree} />
         )}
+      </div>
+      <div>
+        <Label>Type</Label>
+        <Select value={type} onValueChange={setType}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="JUST_NOTICE">Just Notice</SelectItem>
+            <SelectItem value="CONCEPT_NOTE">Concept Note</SelectItem>
+            <SelectItem value="PROPOSAL">Proposal</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* File Section */}

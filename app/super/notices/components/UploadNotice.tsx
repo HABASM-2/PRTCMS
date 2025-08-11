@@ -9,6 +9,7 @@ import { CalendarIcon, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch";
 import {
   Popover,
   PopoverTrigger,
@@ -20,10 +21,18 @@ import { toast } from "sonner"; // ✅ Sonner toast
 interface UploadNoticeProps {
   userId: string;
 }
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function UploadNotice({ userId }: UploadNoticeProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [type, setType] = useState("");
   const [selectedOrgUnitIds, setSelectedOrgUnitIds] = useState<number[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [date, setDate] = useState<Date>();
@@ -42,6 +51,7 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
     new Set()
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isActive, setIsActive] = useState(true);
 
   // Helpers...
   function getAncestorIds(tree: any[], assignedIds: number[]): Set<number> {
@@ -231,9 +241,11 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
         body: JSON.stringify({
           title,
           description,
+          type,
           orgUnitId: validAssignedId,
           expiredAt: date.toISOString(),
           fileUrl,
+          isActive,
         }),
       });
 
@@ -241,6 +253,7 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
         toast.success("Notice posted successfully.");
         setTitle("");
         setDescription("");
+        setType("");
         setFile(null);
         setDate(undefined);
         setPreview(null);
@@ -259,6 +272,14 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
   return (
     <div className="space-y-4 max-w-xl">
       <h2 className="text-xl font-semibold">Create a New Proposal Notice</h2>
+      <div className="flex items-center space-x-2">
+        <Switch
+          checked={isActive}
+          onCheckedChange={setIsActive}
+          id="notice-active"
+        />
+        <Label htmlFor="notice-active">Active</Label>
+      </div>
       <div>
         <Label>Title</Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -269,6 +290,20 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
         />
+      </div>
+      {/* Type Select */}
+      <div>
+        <Label>Type</Label>
+        <Select value={type} onValueChange={setType}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="JUST_NOTICE">Just Notice</SelectItem>
+            <SelectItem value="CONCEPT_NOTE">Concept Note</SelectItem>
+            <SelectItem value="PROPOSAL">Poposal</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <Label>Org Units</Label>
