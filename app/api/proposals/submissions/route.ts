@@ -10,7 +10,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
-    // Fetch all submissions with latest version and all versions
+    // Fetch all submissions with latest version and all versions,
+    // including reviews and their comments
     const submissions = await prisma.submitProposal.findMany({
       where: { submittedById: userId },
       orderBy: { updatedAt: "desc" },
@@ -21,6 +22,12 @@ export async function GET(request: Request) {
             reviews: {
               include: {
                 reviewer: true,
+                ProposalReviewComment: {
+                  include: {
+                    author: true,
+                  },
+                  orderBy: { createdAt: "asc" },
+                },
               },
             },
           },
@@ -30,7 +37,7 @@ export async function GET(request: Request) {
             decidedBy: true,
           },
         },
-      },
+      }, 
     });
 
     const mapped = submissions.map((sub) => {
@@ -54,11 +61,22 @@ export async function GET(request: Request) {
           fileUrl: version.fileUrl,
           createdAt: version.createdAt.toISOString(),
           updatedAt: version.updatedAt.toISOString(),
+          resubmitAllowed: version.resubmitAllowed,
           reviews: version.reviews.map((review) => ({
             id: review.id,
             reviewerName: review.reviewer?.fullName || "Unknown",
             status: review.status,
-            comments: review.comments,
+            // Old comments string removed in favor of detailed comments array
+            // comments: review.comments,
+
+            // Map ProposalReviewComment array with author info
+            comments: review.ProposalReviewComment.map((c) => ({
+              id: c.id,
+              authorName: c.author?.fullName || "Unknown",
+              content: c.content,
+              createdAt: c.createdAt.toISOString(),
+            })),
+
             createdAt: review.createdAt.toISOString(),
           })),
         })),

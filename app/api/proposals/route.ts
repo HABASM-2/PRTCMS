@@ -116,6 +116,7 @@ export async function GET() {
       include: {
         submittedBy: { select: { fullName: true } },
         orgUnit: { select: { name: true } },
+        notice: { select: { type: true } },
       },
     });
 
@@ -128,6 +129,7 @@ export async function GET() {
       submittedAt: new Date(p.createdAt).toLocaleString(),
       description: p.description,
       fileUrl: p.fileUrl || "",
+      noticeType: p.notice?.type || null,
     }));
 
     return NextResponse.json(formatted);

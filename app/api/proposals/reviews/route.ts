@@ -94,6 +94,11 @@ export async function GET(request: Request) {
       skip,
       take: pageSize,
       include: {
+        notice: { // <-- ADD THIS
+          select: {
+            type: true,
+          },
+        },
         versions: {
           include: {
             reviews: {
@@ -138,6 +143,7 @@ export async function GET(request: Request) {
       submittedBy: p.submittedBy.fullName,
       orgUnitName: p.orgUnit.name,
       createdAt: p.createdAt.toISOString(),
+      noticeType: p.notice.type,
       versions: p.versions.map((v) => ({
         id: v.id,
         versionNumber: v.versionNumber,
@@ -146,6 +152,7 @@ export async function GET(request: Request) {
         participants: v.participants,
         fileUrl: v.fileUrl,
         createdAt: v.createdAt.toISOString(),
+        resubmitAllowed: v.resubmitAllowed,
         reviews: v.reviews.map((r) => ({
           id: r.id,
           reviewerId: r.reviewerId,

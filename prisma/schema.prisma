@@ -36,17 +36,18 @@ model User {
   createdBy    User?  @relation("CreatedUsers", fields: [createdById], references: [id])
   createdUsers User[] @relation("CreatedUsers")
 
-  organisations  Organisation[]   @relation("UserOrganisations")
-  Organisation   Organisation[]   @relation("CreatedBy")
-  managerTag     String?
-  ActivityLog    ActivityLog[]
-  SessionLogs    SessionLog[] // ← NEW
-  createdAt      DateTime         @default(now())
-  UserOrgUnit    UserOrgUnit[]
-  ProposalNotice ProposalNotice[]
-  SubmitProposal SubmitProposal[]
-  ProposalReview ProposalReview[]
-  FinalDecision  FinalDecision[]
+  organisations         Organisation[]          @relation("UserOrganisations")
+  Organisation          Organisation[]          @relation("CreatedBy")
+  managerTag            String?
+  ActivityLog           ActivityLog[]
+  SessionLogs           SessionLog[] // ← NEW
+  createdAt             DateTime                @default(now())
+  UserOrgUnit           UserOrgUnit[]
+  ProposalNotice        ProposalNotice[]
+  SubmitProposal        SubmitProposal[]
+  ProposalReview        ProposalReview[]
+  FinalDecision         FinalDecision[]
+  ProposalReviewComment ProposalReviewComment[]
 }
 
 model ActivityLog {
@@ -181,6 +182,10 @@ model ProposalVersion {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  type NoticeType @default(CONCEPT_NOTE)
+
+  resubmitAllowed Boolean @default(false)
+
   reviews ProposalReview[]
 
   @@unique([submitProposalId, versionNumber])
@@ -195,13 +200,30 @@ model ProposalReview {
   reviewer   User @relation(fields: [reviewerId], references: [id])
   reviewerId Int
 
-  status    ReviewStatus
-  comments  String?
-  createdAt DateTime     @default(now())
+  status                ReviewStatus
+  comments              String?
+  createdAt             DateTime                @default(now())
+  ProposalReviewComment ProposalReviewComment[]
 
   @@unique([proposalVersionId, reviewerId])
   @@index([proposalVersionId])
   @@index([reviewerId])
+}
+
+model ProposalReviewComment {
+  id               Int            @id @default(autoincrement())
+  proposalReview   ProposalReview @relation(fields: [proposalReviewId], references: [id], onDelete: Cascade)
+  proposalReviewId Int
+
+  author   User @relation(fields: [authorId], references: [id])
+  authorId Int
+
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime?
+
+  @@index([proposalReviewId])
+  @@index([authorId])
 }
 
 enum ReviewStatus {

@@ -22,6 +22,9 @@ export async function GET(
     const proposal = await prisma.submitProposal.findUnique({
       where: { id: proposalId },
       include: {
+        notice: {
+          select: { type: true },
+        },
         submittedBy: { select: { fullName: true } },
         orgUnit: { select: { name: true } },
         versions: {
@@ -30,6 +33,12 @@ export async function GET(
             reviews: {
               include: {
                 reviewer: { select: { id: true, fullName: true } },
+                ProposalReviewComment: {
+                  include: {
+                    author: { select: { id: true, fullName: true } },
+                  },
+                  orderBy: { createdAt: "asc" },
+                },
               },
               orderBy: { createdAt: "asc" },
             },
@@ -51,18 +60,27 @@ export async function GET(
       submittedBy: proposal.submittedBy.fullName,
       orgUnit: proposal.orgUnit.name,
       submittedAt: proposal.createdAt.toISOString(),
+      proposalType: proposal.notice?.type ?? "JUST_NOTICE",
       versions: proposal.versions.map((v) => ({
+        id: v.id,
         versionNumber: v.versionNumber,
         title: v.title,
         description: v.description,
         participants: v.participants,
         fileUrl: v.fileUrl,
         createdAt: v.createdAt.toISOString(),
+        resubmitAllowed: v.resubmitAllowed,
         reviews: v.reviews.map((r) => ({
           reviewerId: r.reviewerId,
           reviewerName: r.reviewer.fullName,
           status: r.status,
-          comments: r.comments,
+          // You can keep comments here if needed, but main comments come from ProposalReviewComment
+          commentsDetails: r.ProposalReviewComment.map((c) => ({
+            id: c.id,
+            authorName: c.author.fullName,
+            content: c.content,
+            createdAt: c.createdAt.toISOString(),
+          })),
         })),
       })),
     };
@@ -70,6 +88,9 @@ export async function GET(
     return NextResponse.json(formatted);
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Failed to fetch proposal versions" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch proposal versions" },
+      { status: 500 }
+    );
   }
 }

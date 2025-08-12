@@ -21,11 +21,18 @@ import {
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+interface ReviewComment {
+  id: number;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
 interface Review {
   id: number;
   reviewerName: string;
   status: string;
-  comments?: string;
+  comments: ReviewComment[];
   createdAt: string;
 }
 
@@ -36,6 +43,7 @@ interface Version {
   participants: string[];
   title: string;
   fileUrl?: string | null;
+  resubmitAllowed: boolean;
 }
 
 interface FinalDecision {
@@ -67,24 +75,32 @@ export default function MySubmissions({ userId }: Props) {
     null
   );
 
-  function latestVersionNeedsModification(submission: Submission): boolean {
-    if (!submission.versions.length) return false;
+  function getLatestVersionWithNeedsModification(submission: Submission): {
+    latestVersion: Version | null;
+    needsModification: boolean;
+  } {
+    if (!submission.versions.length)
+      return { latestVersion: null, needsModification: false };
 
-    // Find latest version by highest versionNumber (assuming sorted descending)
-    const latestVersion = submission.versions.reduce((prev, current) => {
-      return current.versionNumber > prev.versionNumber ? current : prev;
-    }, submission.versions[0]);
+    const latestVersion = submission.versions.reduce(
+      (prev, current) =>
+        current.versionNumber > prev.versionNumber ? current : prev,
+      submission.versions[0]
+    );
 
-    if (!latestVersion.reviews.length) return false;
+    if (!latestVersion.reviews.length)
+      return { latestVersion, needsModification: false };
 
-    // Find latest review by createdAt date
-    const latestReview = latestVersion.reviews.reduce((prev, current) => {
-      return new Date(current.createdAt) > new Date(prev.createdAt)
-        ? current
-        : prev;
-    }, latestVersion.reviews[0]);
+    const latestReview = latestVersion.reviews.reduce(
+      (prev, current) =>
+        new Date(current.createdAt) > new Date(prev.createdAt) ? current : prev,
+      latestVersion.reviews[0]
+    );
 
-    return latestReview.status.toUpperCase() === "NEEDS_MODIFICATION";
+    const needsModification =
+      latestReview.status.toUpperCase() === "NEEDS_MODIFICATION";
+
+    return { latestVersion, needsModification };
   }
 
   async function fetchSubmissions() {
@@ -156,36 +172,44 @@ export default function MySubmissions({ userId }: Props) {
               </tr>
             </thead>
             <tbody>
-              {submissions.map((sub) => (
-                <tr
-                  key={sub.id}
-                  className="hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  <td className="p-2">{sub.title}</td>
-                  <td className="p-2">{sub.status}</td>
-                  <td className="p-2">
-                    {new Date(sub.updatedAt).toLocaleDateString()}
-                  </td>
-                  <td className="p-2 space-x-2">
-                    <Button size="sm" onClick={() => setViewingSubmission(sub)}>
-                      View Details
-                    </Button>
-                    {latestVersionNeedsModification(sub) && (
+              {submissions.map((sub) => {
+                const { latestVersion, needsModification } =
+                  getLatestVersionWithNeedsModification(sub);
+
+                return (
+                  <tr
+                    key={sub.id}
+                    className="hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <td className="p-2">{sub.title}</td>
+                    <td className="p-2">{sub.status}</td>
+                    <td className="p-2">
+                      {new Date(sub.updatedAt).toLocaleDateString()}
+                    </td>
+                    <td className="p-2 space-x-2">
                       <Button
                         size="sm"
-                        onClick={() => {
-                          const fullSubmission = submissions.find(
-                            (s) => s.id === sub.id
-                          );
-                          setResubmittingSubmission(fullSubmission || null);
-                        }}
+                        onClick={() => setViewingSubmission(sub)}
                       >
-                        Resubmit
+                        View Details
                       </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      {needsModification && latestVersion?.resubmitAllowed && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const fullSubmission = submissions.find(
+                              (s) => s.id === sub.id
+                            );
+                            setResubmittingSubmission(fullSubmission || null);
+                          }}
+                        >
+                          Resubmit
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
@@ -338,10 +362,39 @@ export default function MySubmissions({ userId }: Props) {
                                       <p>
                                         <strong>Status:</strong> {review.status}
                                       </p>
-                                      <p>
-                                        <strong>Comments:</strong>{" "}
-                                        {review.comments || "No comments"}
-                                      </p>
+                                      <div>
+                                        <strong>Comments:</strong>
+                                        {review.comments &&
+                                        review.comments.length > 0 ? (
+                                          <ul className="list-disc ml-6 space-y-1">
+                                            {review.comments.map((comment) => (
+                                              <li
+                                                key={comment.id}
+                                                className="mb-1"
+                                              >
+                                                <p>
+                                                  <em>{comment.authorName}</em>{" "}
+                                                  said:
+                                                </p>
+                                                <p
+                                                  style={{
+                                                    whiteSpace: "pre-wrap",
+                                                  }}
+                                                >
+                                                  {comment.content}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  {new Date(
+                                                    comment.createdAt
+                                                  ).toLocaleString()}
+                                                </p>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        ) : (
+                                          <p>No comments</p>
+                                        )}
+                                      </div>
                                       <p className="text-sm text-muted-foreground">
                                         Reviewed on{" "}
                                         {new Date(

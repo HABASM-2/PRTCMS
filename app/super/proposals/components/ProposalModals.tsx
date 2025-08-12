@@ -18,6 +18,7 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 function debounce<F extends (...args: any[]) => void>(
   func: F,
@@ -57,6 +58,10 @@ export default function ProposalDetailsModal({
     "ACCEPTED" | "REJECTED" | null
   >(null);
   const [decisionReason, setDecisionReason] = useState("");
+
+  const [changeTypeDialogOpen, setChangeTypeDialogOpen] = useState(false);
+  const [changeTypeReason, setChangeTypeReason] = useState("");
+  const [changingType, setChangingType] = useState(false);
 
   const debouncedSetReviewerSearch = useCallback(
     debounce((val: string) => {
@@ -102,6 +107,62 @@ export default function ProposalDetailsModal({
       }
       return [...prev, r];
     });
+  }
+  function handleChangeToProposal() {
+    setChangeTypeReason("");
+    setChangeTypeDialogOpen(true);
+  }
+
+  async function confirmChangeType() {
+    if (!proposal) return;
+    if (!changeTypeReason.trim()) {
+      alert("Please enter a reason/comment for the change");
+      return;
+    }
+
+    setChangingType(true);
+    try {
+      const res = await fetch(`/api/proposals/${proposal.id}/change-type`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          newType: "PROPOSAL",
+          comment: changeTypeReason.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to change type");
+      }
+
+      alert("Proposal type changed to PROPOSAL");
+      setChangeTypeDialogOpen(false);
+      await refreshProposal(proposal.id);
+    } catch (err) {
+      alert(`Error: ${err}`);
+    } finally {
+      setChangingType(false);
+    }
+  }
+
+  async function toggleResubmitAllowed(versionId: number, newValue: boolean) {
+    try {
+      const res = await fetch(
+        `/api/proposals/proposalVersions/${versionId}/resubmitAllowed`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resubmitAllowed: newValue }),
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to update resubmitAllowed");
+
+      // refresh proposal data or update state
+    } catch (error) {
+      alert("Error updating resubmitAllowed");
+    }
   }
 
   async function assignReviewers() {
@@ -229,8 +290,6 @@ export default function ProposalDetailsModal({
   // Fix here: define a boolean to check if a final decision with a status exists
   const hasFinalDecision =
     proposal?.finalDecision && !!proposal.finalDecision.status;
-  console.log("Final Decision Exists:", proposal);
-  console.log("Final Decision Exists:", proposal?.finalDecision);
   useEffect(() => {
     if (open) {
       openModal();
@@ -334,11 +393,43 @@ export default function ProposalDetailsModal({
                           <div key={rev.reviewerId} className="ml-4 mt-1">
                             <strong>{rev.reviewerName}</strong> —{" "}
                             {statusIcon(rev.status)}
-                            <div className="text-sm text-gray-600">
-                              {rev.comments || "No comments"}
-                            </div>
+                            {rev.commentsDetails.length === 0 ? (
+                              <div className="text-sm text-gray-600">
+                                No comments
+                              </div>
+                            ) : (
+                              rev.commentsDetails.map((comment: any) => (
+                                <div
+                                  key={comment.id}
+                                  className="text-sm text-gray-700 mb-1 border-l-2 pl-2"
+                                >
+                                  <strong>{comment.authorName}:</strong>{" "}
+                                  {comment.content}
+                                  <div className="text-xs text-gray-400">
+                                    {new Date(
+                                      comment.createdAt
+                                    ).toLocaleString()}
+                                  </div>
+                                </div>
+                              ))
+                            )}
                           </div>
                         ))}
+                      </div>
+                      <div className="mt-4 flex items-center gap-2">
+                        <Checkbox
+                          id={`resubmit-allowed-${version.id}`}
+                          defaultChecked={version.resubmitAllowed} // initial checked state only
+                          onCheckedChange={(checked) => {
+                            toggleResubmitAllowed(version.id, Boolean(checked));
+                          }}
+                        />
+                        <label
+                          htmlFor={`resubmit-allowed-${version.id}`}
+                          className="select-none"
+                        >
+                          Allow Resubmission of this Version
+                        </label>
                       </div>
                     </div>
                   </AccordionContent>
@@ -442,27 +533,52 @@ export default function ProposalDetailsModal({
 
                   {/* Final decision */}
                   <div className="pt-4 border-t flex gap-2">
-                    <Button
-                      variant="destructive"
-                      onClick={() => {
-                        setDecisionToSet("REJECTED");
-                        setReasonDialogOpen(true);
-                      }}
-                      disabled={settingDecision}
-                    >
-                      Reject Proposal
-                    </Button>
+                    {proposal.proposalType === "CONCEPT_NOTE" ? (
+                      <>
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            setDecisionToSet("REJECTED");
+                            setReasonDialogOpen(true);
+                          }}
+                          disabled={settingDecision}
+                        >
+                          Reject Concept Note
+                        </Button>
 
-                    <Button
-                      variant="default"
-                      onClick={() => {
-                        setDecisionToSet("ACCEPTED");
-                        setReasonDialogOpen(true);
-                      }}
-                      disabled={settingDecision}
-                    >
-                      Accept Proposal
-                    </Button>
+                        <Button
+                          variant="default"
+                          onClick={handleChangeToProposal}
+                          disabled={settingDecision}
+                        >
+                          Change to Proposal
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            setDecisionToSet("REJECTED");
+                            setReasonDialogOpen(true);
+                          }}
+                          disabled={settingDecision}
+                        >
+                          Reject Proposal
+                        </Button>
+
+                        <Button
+                          variant="default"
+                          onClick={() => {
+                            setDecisionToSet("ACCEPTED");
+                            setReasonDialogOpen(true);
+                          }}
+                          disabled={settingDecision}
+                        >
+                          Accept Proposal
+                        </Button>
+                      </>
+                    )}
                     {/* Reason input dialog */}
                     <Dialog
                       open={reasonDialogOpen}
@@ -494,6 +610,45 @@ export default function ProposalDetailsModal({
                             disabled={settingDecision}
                           >
                             {settingDecision ? (
+                              <Loader2 className="animate-spin h-4 w-4" />
+                            ) : (
+                              "Submit"
+                            )}
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                    <Dialog
+                      open={changeTypeDialogOpen}
+                      onOpenChange={setChangeTypeDialogOpen}
+                    >
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>
+                            Reason for changing to Proposal
+                          </DialogTitle>
+                          <DialogClose />
+                        </DialogHeader>
+                        <Input
+                          placeholder="Enter reason/comment"
+                          value={changeTypeReason}
+                          onChange={(e) => setChangeTypeReason(e.target.value)}
+                          className="mb-4"
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="secondary"
+                            onClick={() => setChangeTypeDialogOpen(false)}
+                            disabled={changingType}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={confirmChangeType}
+                            disabled={changingType}
+                          >
+                            {changingType ? (
                               <Loader2 className="animate-spin h-4 w-4" />
                             ) : (
                               "Submit"

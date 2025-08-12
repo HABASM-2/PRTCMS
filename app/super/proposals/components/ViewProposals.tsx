@@ -29,6 +29,7 @@ interface Proposal {
   submittedAt: string;
   description?: string;
   fileUrl?: string;
+  noticeType?: string | null;
 }
 
 interface Reviewer {
@@ -147,6 +148,7 @@ export default function ViewProposals({ userId }: { userId: number }) {
                 <TableHead>Title</TableHead>
                 <TableHead>Submitted By</TableHead>
                 <TableHead>Org Unit</TableHead>
+                <TableHead>Notice Type</TableHead>
                 <TableHead>Submitted At</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -157,6 +159,7 @@ export default function ViewProposals({ userId }: { userId: number }) {
                   <TableCell>{proposal.title}</TableCell>
                   <TableCell>{proposal.submittedBy}</TableCell>
                   <TableCell>{proposal.orgUnit}</TableCell>
+                  <TableCell>{proposal.noticeType ?? "N/A"}</TableCell>
                   <TableCell>{proposal.submittedAt}</TableCell>
                   <TableCell className="text-right space-x-2">
                     {/* View Dialog */}
@@ -185,6 +188,10 @@ export default function ViewProposals({ userId }: { userId: number }) {
                           <p>
                             <strong>Participants:</strong>{" "}
                             {selected?.participants}
+                          </p>
+                          <p>
+                            <strong>Notice Type:</strong>{" "}
+                            {selected?.noticeType ?? "N/A"}
                           </p>
                           <p>
                             <strong>Submitted At:</strong>{" "}
