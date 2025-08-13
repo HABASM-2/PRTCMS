@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -76,17 +79,29 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       },
     });
 
-    // Create a new ProposalReviewComment
+    // Create system change comment
     await prisma.proposalReviewComment.create({
       data: {
         proposalReviewId: proposalReview.id,
         authorId: currentUserId,
-        content: comment || "Status changed due to proposal type update",
+        content: "[SYSTEM] Changed from concept note to proposal",
       },
     });
 
+    // Create user-provided reason comment if available
+    if (comment && comment.trim()) {
+      await prisma.proposalReviewComment.create({
+        data: {
+          proposalReviewId: proposalReview.id,
+          authorId: currentUserId,
+          content: comment.trim(),
+        },
+      });
+    }
+
     return NextResponse.json({
-      message: "Proposal type updated, review status set to NEEDS_MODIFICATION, comment recorded",
+      message:
+        "Proposal type updated, review status set to NEEDS_MODIFICATION, comments recorded",
     });
   } catch (err) {
     console.error(err);

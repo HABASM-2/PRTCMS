@@ -10,17 +10,14 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
+import OrgUnitTreeSelector from "./OrgUnitTreeSelector";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner"; // ✅ Sonner toast
-
-interface UploadNoticeProps {
-  userId: string;
-}
+import { toast } from "sonner";
 import {
   Select,
   SelectTrigger,
@@ -29,122 +26,47 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function UploadNotice({ userId }: UploadNoticeProps) {
+interface UploadNoticeProps {
+  userId: string;
+  roles: string[];
+}
+
+export default function UploadNotice({ userId, roles }: UploadNoticeProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState("");
+  const [selectedRole, setSelectedRole] = useState("");
   const [selectedOrgUnitIds, setSelectedOrgUnitIds] = useState<number[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [date, setDate] = useState<Date>();
   const [preview, setPreview] = useState<string | null>(null);
-
   const [orgUnitTree, setOrgUnitTree] = useState<any[]>([]);
-  const [assignedOrgUnitIds, setAssignedOrgUnitIds] = useState<number[]>([]);
-  const [ancestorOrgUnitIds, setAncestorOrgUnitIds] = useState<Set<number>>(
-    new Set()
-  );
-  const [descendantOrgUnitIds, setDescendantOrgUnitIds] = useState<Set<number>>(
-    new Set()
-  );
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
-  const [siblingOrgUnitIds, setSiblingOrgUnitIds] = useState<Set<number>>(
-    new Set()
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isActive, setIsActive] = useState(true);
 
-  // Helpers...
-  function getAncestorIds(tree: any[], assignedIds: number[]): Set<number> {
-    const ancestorIds = new Set<number>();
-    const map = new Map<number, any>();
-    function mapUnits(units: any[]) {
-      for (const unit of units) {
-        map.set(unit.id, unit);
-        if (unit.children) mapUnits(unit.children);
-      }
-    }
-    mapUnits(tree);
-    for (const assignedId of assignedIds) {
-      let current = map.get(assignedId);
-      while (current?.parentId && map.has(current.parentId)) {
-        ancestorIds.add(current.parentId);
-        current = map.get(current.parentId);
-      }
-    }
-    return ancestorIds;
-  }
-
-  function collectSiblingIds(tree: any[], assignedIds: number[]): Set<number> {
-    const siblings = new Set<number>();
-    function dfs(units: any[]) {
-      for (const unit of units) {
-        if (unit.children?.length > 0) {
-          const childrenIds = unit.children.map((child: any) => child.id);
-          const assignedInChildren = childrenIds.filter((id: number) =>
-            assignedIds.includes(id)
-          );
-          if (assignedInChildren.length > 0) {
-            childrenIds.forEach((id: number) => {
-              if (!assignedIds.includes(id)) siblings.add(id);
-            });
-          }
-          unit.children.forEach((child: any) => dfs([child]));
-        }
-      }
-    }
-    dfs(tree);
-    return siblings;
-  }
-
-  function collectDescendants(tree: any[], assignedIds: number[]): Set<number> {
-    const descendants = new Set<number>();
-    function markDescendants(node: any) {
-      if (node.children) {
-        for (const child of node.children) {
-          descendants.add(child.id);
-          markDescendants(child);
-        }
-      }
-    }
-    function dfs(nodes: any[]) {
-      for (const node of nodes) {
-        if (assignedIds.includes(node.id)) {
-          markDescendants(node);
-        } else if (node.children) {
-          dfs(node.children);
-        }
-      }
-    }
-    dfs(tree);
-    return descendants;
-  }
-
-  useEffect(() => {
-    const fetchOrgUnits = async () => {
-      const res = await fetch(
-        `/api/orgunits/org-units/user-orgunit-tree?id=${userId}`
-      );
+  // Fetch org unit tree + assigned units
+  const fetchOrgUnits = async () => {
+    try {
+      const res = await fetch("/api/orgunits/org-units/user-orgunit-tree/all", {
+        headers: { "x-user-id": userId },
+      });
       const data = await res.json();
       if (!res.ok) {
         console.error("Failed to fetch org units:", data.error);
         return;
       }
-      const ancestorIds = getAncestorIds(data.tree, data.assignedOrgUnitIds);
-      const descendantIds = collectDescendants(
-        data.tree,
-        data.assignedOrgUnitIds
-      );
-      const siblingIds = collectSiblingIds(data.tree, data.assignedOrgUnitIds);
+      setSelectedOrgUnitIds(data.assignedOrgUnitIds ?? []);
+      setOrgUnitTree(data.tree ?? []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-      setAncestorOrgUnitIds(ancestorIds);
-      setDescendantOrgUnitIds(descendantIds);
-      setSiblingOrgUnitIds(siblingIds);
-      setAssignedOrgUnitIds(data.assignedOrgUnitIds);
-      setOrgUnitTree(data.tree);
-      setSelectedOrgUnitIds([...data.assignedOrgUnitIds, ...ancestorIds]);
-    };
+  // Call fetch on mount
+  useEffect(() => {
     fetchOrgUnits();
-  }, []);
+  }, [userId]);
 
   const toggleNode = (id: number) => {
     setExpandedNodes((prev) => {
@@ -166,14 +88,7 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
         {units.map((unit) => {
           const hasChildren = !!unit.children?.length;
           const isExpanded = expandedNodes.has(unit.id);
-          const isAssigned = assignedOrgUnitIds.includes(unit.id);
-          const isAncestor = ancestorOrgUnitIds.has(unit.id);
-          const isDescendant = descendantOrgUnitIds.has(unit.id);
-          const isChecked =
-            isAssigned || isAncestor || selectedOrgUnitIds.includes(unit.id);
-          const isSibling = siblingOrgUnitIds.has(unit.id);
-          const isDisabled =
-            isAssigned || isAncestor || isSibling || !isDescendant;
+          const isChecked = selectedOrgUnitIds.includes(unit.id);
 
           return (
             <li key={unit.id}>
@@ -187,19 +102,12 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
                 )}
                 <Checkbox
                   checked={isChecked}
-                  disabled={isDisabled}
-                  onCheckedChange={() => !isDisabled && handleSelect(unit.id)}
+                  onCheckedChange={() => handleSelect(unit.id)}
                 />
-                <span
-                  className={cn("text-sm", {
-                    "text-muted-foreground": isDisabled,
-                  })}
-                >
-                  {unit.name}
-                </span>
+                <span className="text-sm">{unit.name}</span>
               </div>
               {hasChildren && isExpanded && (
-                <OrgUnitCheckboxTree units={unit.children!} />
+                <OrgUnitCheckboxTree units={unit.children} />
               )}
             </li>
           );
@@ -209,31 +117,43 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
   }
 
   const handleSubmit = async () => {
-    if (!title || !date || selectedOrgUnitIds.length === 0) {
-      toast.error("Please fill all required fields.");
-      return;
-    }
-
-    const validAssignedId = selectedOrgUnitIds.find((id) =>
-      assignedOrgUnitIds.includes(id)
-    );
-
-    if (!validAssignedId) {
-      toast.error("Please select one assigned org unit to post notice.");
+    if (!title || !type || !date) {
+      toast.error("Please fill all required fields (Title, Type, Expiry).");
       return;
     }
 
     setIsSubmitting(true);
+
     try {
       let fileUrl = "";
       if (file) {
         const form = new FormData();
         form.append("file", file);
-        const r = await fetch("/api/upload", { method: "POST", body: form });
-        const d = await r.json();
-        if (!r.ok) throw new Error("File upload failed.");
-        fileUrl = d.url;
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: form,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok)
+          throw new Error(uploadData.error || "File upload failed.");
+        fileUrl = uploadData.url;
       }
+
+      // Default to all org units if none selected
+      // In handleSubmit before sending
+      const getImmediateChildrenIds = (tree: any[]): number[] => {
+        // Assuming tree is organisation-level with root children
+        return tree.flatMap((org) => org.children.map((unit: any) => unit.id));
+      };
+
+      const orgUnitIdsToSend =
+        selectedOrgUnitIds.length > 0
+          ? selectedOrgUnitIds // send what is selected
+          : getImmediateChildrenIds(orgUnitTree); // send only first-level children if none selected
+
+      // Use organisationId from first unit in tree
+      const organisationId = orgUnitTree[0]?.organisationId;
+      if (!organisationId) throw new Error("Organisation ID not found.");
 
       const res = await fetch("/api/notices", {
         method: "POST",
@@ -242,26 +162,32 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
           title,
           description,
           type,
-          orgUnitId: validAssignedId,
+          consideredFor: selectedRole,
+          orgUnitIds: orgUnitIdsToSend,
           expiredAt: date.toISOString(),
           fileUrl,
           isActive,
+          organisationId,
         }),
       });
 
-      if (res.ok) {
-        toast.success("Notice posted successfully.");
-        setTitle("");
-        setDescription("");
-        setType("");
-        setFile(null);
-        setDate(undefined);
-        setPreview(null);
-        setSelectedOrgUnitIds([]);
-      } else {
+      if (!res.ok) {
         const error = await res.json();
         throw new Error(error.error || "Failed to post notice.");
       }
+
+      toast.success("Notice posted successfully.");
+
+      // Reset form
+      setTitle("");
+      setDescription("");
+      setType("");
+      setSelectedRole("");
+      setSelectedOrgUnitIds([]);
+      setFile(null);
+      setPreview(null);
+      setDate(undefined);
+      await fetchOrgUnits();
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -269,9 +195,24 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
     }
   };
 
+  // Flatten tree to get all orgUnit IDs recursively
+  const getAllOrgUnitIds = (unit: any): number[] => {
+    const childIds = unit.children?.flatMap(getAllOrgUnitIds) ?? [];
+    return [unit.id, ...childIds];
+  };
+
+  // Filter allowed roles
+  const allowedRoles = [
+    "technology-transfer",
+    "community-service",
+    "research-and-publications",
+  ];
+  const filteredRoles = roles.filter((r) => allowedRoles.includes(r));
+
   return (
     <div className="space-y-4 max-w-xl">
       <h2 className="text-xl font-semibold">Create a New Proposal Notice</h2>
+
       <div className="flex items-center space-x-2">
         <Switch
           checked={isActive}
@@ -280,10 +221,12 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
         />
         <Label htmlFor="notice-active">Active</Label>
       </div>
+
       <div>
         <Label>Title</Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
+
       <div>
         <Label>Description</Label>
         <Textarea
@@ -291,9 +234,27 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-      {/* Type Select */}
+
+      {filteredRoles.length > 0 && (
+        <div>
+          <Label>Notice Considered For:</Label>
+          <Select value={selectedRole} onValueChange={setSelectedRole}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              {filteredRoles.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {role.replace(/-/g, " ")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div>
-        <Label>Type</Label>
+        <Label>Notice Type:</Label>
         <Select value={type} onValueChange={setType}>
           <SelectTrigger>
             <SelectValue placeholder="Select type" />
@@ -301,84 +262,55 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
           <SelectContent>
             <SelectItem value="JUST_NOTICE">Just Notice</SelectItem>
             <SelectItem value="CONCEPT_NOTE">Concept Note</SelectItem>
-            <SelectItem value="PROPOSAL">Poposal</SelectItem>
+            <SelectItem value="PROPOSAL">Proposal</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
       <div>
-        <Label>Org Units</Label>
+        <Label>Select For Which:</Label>
         {orgUnitTree.length === 0 ? (
           <p className="text-sm text-muted-foreground">Loading org units...</p>
         ) : (
-          <OrgUnitCheckboxTree units={orgUnitTree} />
+          <OrgUnitTreeSelector
+            tree={orgUnitTree}
+            onChange={setSelectedOrgUnitIds} // gets only lowest children
+          />
         )}
       </div>
+
       <div>
         <Label>Attachment</Label>
         <Input
           type="file"
           accept=".pdf,.doc,.docx,image/*"
           onChange={(e) => {
-            const f = e.target.files?.[0] || null;
+            const f = e.target.files?.[0] ?? null;
             setFile(f);
-
-            if (!f) {
-              setPreview(null);
-              return;
-            }
-
-            if (f.type.startsWith("image/")) {
-              // ✅ Image preview
-              setPreview(URL.createObjectURL(f));
-            } else if (f.type === "application/pdf") {
-              // ✅ PDF preview
-              setPreview(URL.createObjectURL(f));
-            } else if (
-              f.name.endsWith(".doc") ||
-              f.name.endsWith(".docx") ||
-              f.type.includes("word")
-            ) {
-              // ⚠ DOC/DOCX preview using Google Docs Viewer
-              const blobUrl = URL.createObjectURL(f);
-              setPreview(
-                `https://docs.google.com/viewer?url=${blobUrl}&embedded=true`
-              );
-            } else {
-              setPreview(null);
-            }
+            if (!f) return setPreview(null);
+            setPreview(URL.createObjectURL(f));
           }}
         />
-
-        {file && (
+        {file && preview && (
           <div className="mt-2">
             {file.type.startsWith("image/") ? (
               <img
-                src={preview!}
+                src={preview}
                 alt="Preview"
                 className="max-w-xs max-h-64 rounded border"
               />
-            ) : file.type === "application/pdf" ? (
-              <iframe
-                src={preview!}
-                width="100%"
-                height="400"
-                className="border rounded"
-              />
-            ) : file.name.endsWith(".doc") || file.name.endsWith(".docx") ? (
-              <iframe
-                src={preview!}
-                width="100%"
-                height="400"
-                className="border rounded"
-              />
             ) : (
-              <p className="text-sm text-muted-foreground">
-                Attached: <strong>{file.name}</strong>
-              </p>
+              <iframe
+                src={preview}
+                width="100%"
+                height="400"
+                className="border rounded"
+              />
             )}
           </div>
         )}
       </div>
+
       <div>
         <Label>Expires At</Label>
         <Popover>
@@ -404,6 +336,7 @@ export default function UploadNotice({ userId }: UploadNoticeProps) {
           </PopoverContent>
         </Popover>
       </div>
+
       <Button onClick={handleSubmit} disabled={isSubmitting}>
         {isSubmitting ? (
           <>

@@ -68,13 +68,13 @@ model OrgUnit {
   organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   organisationId Int
 
-  parent         OrgUnit?         @relation("ParentChild", fields: [parentId], references: [id])
-  parentId       Int?
-  children       OrgUnit[]        @relation("ParentChild")
-  createdAt      DateTime         @default(now())
-  UserOrgUnit    UserOrgUnit[]
-  ProposalNotice ProposalNotice[]
-  SubmitProposal SubmitProposal[]
+  parent                OrgUnit?                @relation("ParentChild", fields: [parentId], references: [id])
+  parentId              Int?
+  children              OrgUnit[]               @relation("ParentChild")
+  createdAt             DateTime                @default(now())
+  UserOrgUnit           UserOrgUnit[]
+  SubmitProposal        SubmitProposal[]
+  ProposalNoticeOrgUnit ProposalNoticeOrgUnit[]
 }
 
 model SessionLog {
@@ -107,25 +107,34 @@ model UserOrgUnit {
 }
 
 model ProposalNotice {
-  id             Int              @id @default(autoincrement())
+  id             Int                     @id @default(autoincrement())
   title          String
   description    String?
-  fileUrl        String? // Optional link to file or attachment
-  orgUnit        OrgUnit          @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
-  orgUnitId      Int
-  createdBy      User             @relation(fields: [createdById], references: [id])
+  fileUrl        String?
+  orgUnits       ProposalNoticeOrgUnit[] // many-to-many relation
+  createdBy      User                    @relation(fields: [createdById], references: [id])
   createdById    Int
   expiredAt      DateTime
-  createdAt      DateTime         @default(now())
+  createdAt      DateTime                @default(now())
   SubmitProposal SubmitProposal[]
 
-  type     NoticeType @default(JUST_NOTICE)
-  isActive Boolean    @default(true)
+  type          NoticeType @default(JUST_NOTICE)
+  consideredFor String?
 
-  hidden Boolean @default(false)
+  isActive Boolean @default(true)
+  hidden   Boolean @default(false)
 
-  @@index([orgUnitId])
   @@index([createdById])
+}
+
+model ProposalNoticeOrgUnit {
+  proposalNotice   ProposalNotice @relation(fields: [proposalNoticeId], references: [id], onDelete: Cascade)
+  proposalNoticeId Int
+
+  orgUnit   OrgUnit @relation(fields: [orgUnitId], references: [id], onDelete: Cascade)
+  orgUnitId Int
+
+  @@id([proposalNoticeId, orgUnitId])
 }
 
 model SubmitProposal {

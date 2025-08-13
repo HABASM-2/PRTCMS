@@ -36,7 +36,11 @@ const navItems = [
     name: "Notices",
     href: "/super/notices",
     icon: Tag,
-    roles: ["manager"],
+    roles: [
+      "technology-transfer",
+      "community-service",
+      "research-and-publications",
+    ],
   },
   {
     name: "Proposals",

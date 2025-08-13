@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import OrgUnitSelector from "./OrgUnitSelector"; // ✅ Use the correct wrapper
+import OrgUnitSelector from "./OrgUnitSelector";
 
 type Organisation = {
   id: number;
@@ -46,6 +46,13 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
     password: "",
   });
   const [managerTag, setManagerTag] = useState("");
+
+  // extra role names for director
+  const extraRoles = [
+    "research-and-publications",
+    "community-service",
+    "technology-transfer",
+  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -80,13 +87,36 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
     setLoading(true);
 
     const managerRole = roles.find((r) => r.name.toLowerCase() === "manager");
+    const directorRole = roles.find((r) => r.name.toLowerCase() === "director");
+    const extraRoleIds = roles
+      .filter((r) => extraRoles.includes(r.name.toLowerCase()))
+      .map((r) => r.id);
+
     const isManagerSelected =
       managerRole && selectedRoleIds.includes(managerRole.id);
 
+    const isDirectorSelected =
+      directorRole && selectedRoleIds.includes(directorRole.id);
+
+    // Manager tag validation
     if (isManagerSelected && !managerTag.trim()) {
       toast.error("Manager Tag is required.");
       setLoading(false);
       return;
+    }
+
+    // Director extra roles validation
+    if (isDirectorSelected) {
+      const hasExtraRoleSelected = selectedRoleIds.some((id) =>
+        extraRoleIds.includes(id)
+      );
+      if (!hasExtraRoleSelected) {
+        toast.error(
+          "Please select at least one of: Research & Publications, Community Service, Technology Transfer"
+        );
+        setLoading(false);
+        return;
+      }
     }
 
     const payload = {
@@ -183,39 +213,78 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
               </div>
             ) : (
               <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
-                {roles.map((role) => {
-                  const isManager = role.name.toLowerCase() === "manager";
-                  const checked = selectedRoleIds.includes(role.id);
-
-                  return (
-                    <div key={role.id} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`role-${role.id}`}
-                        checked={checked}
-                        onCheckedChange={(checked) => {
-                          setSelectedRoleIds((prev) =>
-                            checked
-                              ? [...prev, role.id]
-                              : prev.filter((id) => id !== role.id)
-                          );
-                        }}
-                      />
-                      <Label htmlFor={`role-${role.id}`} className="text-sm">
-                        {role.name}
-                      </Label>
-
-                      {isManager && checked && (
-                        <Input
-                          className="ml-2 h-8 w-60"
-                          placeholder="Manager Tag"
-                          value={managerTag}
-                          onChange={(e) => setManagerTag(e.target.value)}
-                          required
-                        />
-                      )}
-                    </div>
+                {(() => {
+                  const director = roles.find(
+                    (r) => r.name.toLowerCase() === "director"
                   );
-                })}
+
+                  const baseRoles = roles.filter(
+                    (r) => !extraRoles.includes(r.name.toLowerCase())
+                  );
+
+                  let orderedRoles: Role[] = [];
+                  baseRoles.forEach((role) => {
+                    orderedRoles.push(role);
+                    if (
+                      director &&
+                      role.id === director.id &&
+                      selectedRoleIds.includes(director.id)
+                    ) {
+                      orderedRoles.push(
+                        ...roles.filter((r) =>
+                          extraRoles.includes(r.name.toLowerCase())
+                        )
+                      );
+                    }
+                  });
+
+                  return orderedRoles.map((role) => {
+                    const checked = selectedRoleIds.includes(role.id);
+                    const isManager = role.name.toLowerCase() === "manager";
+                    const isExtraRole = extraRoles.includes(
+                      role.name.toLowerCase()
+                    );
+
+                    return (
+                      <div
+                        key={role.id}
+                        className={`flex items-center gap-2 ${
+                          isExtraRole ? "pl-6 border-l border-muted" : ""
+                        }`}
+                      >
+                        <Checkbox
+                          id={`role-${role.id}`}
+                          checked={checked}
+                          onCheckedChange={(checked) => {
+                            setSelectedRoleIds((prev) =>
+                              checked
+                                ? [...prev, role.id]
+                                : prev.filter((id) => id !== role.id)
+                            );
+                          }}
+                        />
+                        <Label
+                          htmlFor={`role-${role.id}`}
+                          className={`text-sm ${
+                            isExtraRole ? "text-muted-foreground" : ""
+                          }`}
+                        >
+                          {role.name}
+                        </Label>
+
+                        {isManager && checked && (
+                          <Input
+                            className="ml-2 h-8 w-60"
+                            placeholder="Manager Tag"
+                            value={managerTag}
+                            onChange={(e) => setManagerTag(e.target.value)}
+                            required
+                          />
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
@@ -254,7 +323,7 @@ export default function AddUserForm({ onSuccess }: AddUserFormProps) {
           <div>
             <Label className="mb-2 block">Org Units</Label>
             <OrgUnitSelector
-              userId={0} // new user, no assignments yet
+              userId={0}
               organisationId={selectedOrgId}
               onChange={(ids) => setSelectedOrgUnitIds(ids)}
             />

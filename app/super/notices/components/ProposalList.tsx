@@ -84,9 +84,10 @@ function ViewNoticeModal({
 }
 interface ProposalListProps {
   userId: string;
+  roles: string[];
 }
 
-export default function ProposalList({ userId }: ProposalListProps) {
+export default function ProposalList({ userId, roles }: ProposalListProps) {
   const [notices, setNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");

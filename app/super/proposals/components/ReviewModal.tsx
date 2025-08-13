@@ -290,9 +290,11 @@ export default function ReviewModal({
                             <textarea
                               className="w-full rounded border p-2 mt-3 resize-none"
                               rows={3}
-                              placeholder="Add a comment..."
-                              value={newComment}
-                              onChange={(e) => setNewComment(e.target.value)}
+                              placeholder="Edit your comment..."
+                              value={editingContent}
+                              onChange={(e) =>
+                                setEditingContent(e.target.value)
+                              }
                               disabled={resubmitAllowed}
                             />
                             <div className="mt-1 space-x-2">
@@ -321,7 +323,7 @@ export default function ReviewModal({
                                 <button
                                   onClick={() => {
                                     setEditingCommentId(c.id);
-                                    setEditingContent(c.content);
+                                    setEditingContent(c.content); // pre-fill edit box
                                   }}
                                   className="hover:underline"
                                 >

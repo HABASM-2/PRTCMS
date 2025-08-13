@@ -13,31 +13,35 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
 
   const router = useRouter();
   const { data: session, status } = useSession();
 
+  // --- Check if users exist in the DB ---
+  useEffect(() => {
+    const checkUsers = async () => {
+      try {
+        const res = await fetch("/api/check-users");
+        const data = await res.json();
+        if (!data.hasUsers) {
+          router.replace("/install"); // redirect if no users
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setCheckingSetup(false);
+      }
+    };
+
+    checkUsers();
+  }, [router]);
+
+  // --- Redirect logged-in users ---
   useEffect(() => {
     if (status === "loading") return;
-
     if (session?.user?.roles?.length) {
-      // OPTION 1: Always redirect to /super (default behavior)
       router.replace("/super");
-
-      // OPTION 2: Redirect based on first matching role (optional alternative)
-      /*
-      const roleRedirects: Record<string, string> = {
-        super: "/super",
-        admin: "/admin",
-        manager: "/manager",
-        user: "/user",
-      };
-
-      const redirectPath = session.user.roles.find((role) => roleRedirects[role]);
-      if (redirectPath) {
-        router.replace(roleRedirects[redirectPath]);
-      }
-      */
     }
   }, [session, status, router]);
 
@@ -59,6 +63,14 @@ export default function LoginPage() {
       setError("Invalid username or password");
     }
   };
+
+  if (checkingSetup) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-6 h-6 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <main className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-950 transition-colors">
