@@ -40,13 +40,16 @@ const navItems = [
       "technology-transfer",
       "community-service",
       "research-and-publications",
+      "dean",
+      "coordinator",
+      "head",
     ],
   },
   {
     name: "Proposals",
     href: "/super/proposals",
     icon: Paperclip,
-    roles: ["user", "manager"],
+    roles: ["user", "manager", "dean"],
   },
   {
     name: "Settings",

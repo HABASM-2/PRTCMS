@@ -14,7 +14,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogTrigger,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
@@ -22,12 +21,30 @@ import { toast } from "sonner";
 import { Pencil, Trash2, Loader2, Eye } from "lucide-react";
 import EditNoticeForm from "./EditNoticeForm";
 
+interface OrgUnit {
+  id: number;
+  name: string;
+}
+
+interface Notice {
+  id: number;
+  title: string;
+  description?: string;
+  orgUnits?: { orgUnit: OrgUnit }[];
+  createdAt: string;
+  expiredAt?: string;
+  createdBy?: { fullName: string };
+  fileUrl?: string | null;
+  type?: string;
+  isActive?: boolean;
+}
+
 function ViewNoticeModal({
   notice,
   open,
   onOpenChange,
 }: {
-  notice: any;
+  notice: Notice;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -39,28 +56,43 @@ function ViewNoticeModal({
           <div>
             <strong>Title:</strong> {notice.title}
           </div>
+
           {notice.description && (
             <div>
               <strong>Description:</strong>
               <p className="whitespace-pre-wrap">{notice.description}</p>
             </div>
           )}
+
           <div>
             <strong>Submitted By:</strong> {notice.createdBy?.fullName || "N/A"}
           </div>
+
           <div>
-            <strong>Organisation Unit:</strong> {notice.orgUnit?.name || "N/A"}
+            <strong>Assigned Org Units:</strong>
+            {notice.orgUnits?.length ? (
+              <ul className="list-disc list-inside ml-4">
+                {notice.orgUnits.map((ou) => (
+                  <li key={ou.orgUnit.id}>{ou.orgUnit.name}</li>
+                ))}
+              </ul>
+            ) : (
+              <span> N/A</span>
+            )}
           </div>
+
           <div>
             <strong>Created At:</strong>{" "}
             {new Date(notice.createdAt).toLocaleString()}
           </div>
+
           <div>
             <strong>Expires At:</strong>{" "}
             {notice.expiredAt
               ? new Date(notice.expiredAt).toLocaleString()
               : "N/A"}
           </div>
+
           {notice.fileUrl && (
             <div>
               <strong>Attached File:</strong>{" "}
@@ -82,24 +114,25 @@ function ViewNoticeModal({
     </Dialog>
   );
 }
+
 interface ProposalListProps {
   userId: string;
   roles: string[];
 }
 
 export default function ProposalList({ userId, roles }: ProposalListProps) {
-  const [notices, setNotices] = useState<any[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 10;
 
-  const [editingNotice, setEditingNotice] = useState<any | null>(null);
+  const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   // View modal state
-  const [viewingNotice, setViewingNotice] = useState<any | null>(null);
+  const [viewingNotice, setViewingNotice] = useState<Notice | null>(null);
 
   const fetchNotices = async () => {
     setLoading(true);
@@ -124,8 +157,6 @@ export default function ProposalList({ userId, roles }: ProposalListProps) {
     fetchNotices();
   }, [query, page]);
 
-  const totalPages = Math.ceil(total / pageSize);
-
   const handleDelete = async () => {
     if (!deletingId) return;
     try {
@@ -141,6 +172,8 @@ export default function ProposalList({ userId, roles }: ProposalListProps) {
       setDeletingId(null);
     }
   };
+
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div className="space-y-4">
@@ -163,7 +196,7 @@ export default function ProposalList({ userId, roles }: ProposalListProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Title</TableHead>
-              <TableHead>Org Unit</TableHead>
+              {/* <TableHead>Org Unit</TableHead> */}
               <TableHead>Created By</TableHead>
               <TableHead>Created At</TableHead>
               <TableHead>Type</TableHead>
@@ -174,13 +207,13 @@ export default function ProposalList({ userId, roles }: ProposalListProps) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-6">
+                <TableCell colSpan={7} className="text-center py-6">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                 </TableCell>
               </TableRow>
             ) : notices.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center">
+                <TableCell colSpan={7} className="text-center">
                   No notices found.
                 </TableCell>
               </TableRow>
@@ -188,7 +221,17 @@ export default function ProposalList({ userId, roles }: ProposalListProps) {
               notices.map((notice) => (
                 <TableRow key={notice.id}>
                   <TableCell>{notice.title}</TableCell>
-                  <TableCell>{notice.orgUnit?.name}</TableCell>
+                  {/* <TableCell>
+                    {notice.orgUnits?.length ? (
+                      <ul className="list-disc list-inside ml-2 text-sm">
+                        {notice.orgUnits.map((ou) => (
+                          <li key={ou.orgUnit.id}>{ou.orgUnit.name}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      "N/A"
+                    )}
+                  </TableCell> */}
                   <TableCell>{notice.createdBy?.fullName}</TableCell>
                   <TableCell>
                     {new Date(notice.createdAt).toLocaleString()}

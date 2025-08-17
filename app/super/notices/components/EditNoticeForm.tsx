@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { CalendarIcon, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
@@ -25,6 +25,12 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
+interface OrgUnitNode {
+  id: number;
+  name: string;
+  children: OrgUnitNode[];
+}
+
 export default function EditNoticeForm({
   notice,
   onSuccess,
@@ -42,26 +48,72 @@ export default function EditNoticeForm({
   );
   const [fileDeleted, setFileDeleted] = useState(false);
 
-  const [orgUnitTree, setOrgUnitTree] = useState<any[]>([]);
-  const [assignedOrgUnitIds, setAssignedOrgUnitIds] = useState<number[]>([]);
-  const [selectedOrgUnitId, setSelectedOrgUnitId] = useState<number>(
-    notice.orgUnitId
-  );
+  const [orgUnitTree, setOrgUnitTree] = useState<OrgUnitNode[]>([]);
+  const [selectedOrgUnitIds, setSelectedOrgUnitIds] = useState<number[]>([]);
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
+  const [unitMap, setUnitMap] = useState<
+    Map<number, OrgUnitNode & { parentId: number | null }>
+  >(new Map());
+
   const [type, setType] = useState(notice.type || "JUST_NOTICE");
   const [isActive, setIsActive] = useState(notice.isActive ?? true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Fetch org unit tree
   useEffect(() => {
     const fetchOrgUnits = async () => {
-      const res = await fetch(
-        `/api/orgunits/org-units/user-orgunit-tree?id=${notice.createdById}`
-      );
-      const data = await res.json();
-      setAssignedOrgUnitIds(data.assignedOrgUnitIds);
-      setOrgUnitTree(data.tree);
+      try {
+        const res = await fetch(
+          "/api/orgunits/org-units/user-orgunit-tree/all",
+          { headers: { "x-user-id": String(notice.createdById) } }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          console.error("Failed to fetch org units:", data.error);
+          return;
+        }
+
+        setOrgUnitTree(data.tree ?? []);
+
+        // Build unit map for parent lookup
+        const map = new Map<
+          number,
+          OrgUnitNode & { parentId: number | null }
+        >();
+        const buildMap = (
+          node: OrgUnitNode,
+          parentId: number | null = null
+        ) => {
+          map.set(node.id, { ...node, parentId });
+          node.children.forEach((child) => buildMap(child, node.id));
+        };
+        data.tree?.forEach(buildMap);
+        setUnitMap(map);
+
+        // Preselect org units including parents
+        const preselectedIds =
+          notice.orgUnits?.map((ou: any) => ou.orgUnitId) || [];
+        const allSelected = new Set<number>();
+
+        preselectedIds.forEach((id: any) => {
+          allSelected.add(id);
+          let current = map.get(id);
+          while (current?.parentId) {
+            allSelected.add(current.parentId);
+            current = map.get(current.parentId);
+          }
+        });
+
+        setSelectedOrgUnitIds(Array.from(allSelected));
+        // setExpandedNodes(new Set(Array.from(allSelected)));
+        setExpandedNodes(new Set());
+      } catch (err) {
+        console.error(err);
+      }
     };
+
     fetchOrgUnits();
-  }, [notice.createdById]);
+  }, [notice.createdById, notice.orgUnits]);
 
   const toggleNode = (id: number) => {
     setExpandedNodes((prev) => {
@@ -71,41 +123,81 @@ export default function EditNoticeForm({
     });
   };
 
-  const OrgUnitRadioTree = ({ units }: { units: any[] }) => {
+  const getAllChildrenIds = (node: OrgUnitNode): number[] => {
+    return node.children.reduce(
+      (acc: number[], child) => [...acc, child.id, ...getAllChildrenIds(child)],
+      []
+    );
+  };
+
+  const handleSelect = (id: number) => {
+    setSelectedOrgUnitIds((prev) => {
+      const newSelected = new Set(prev);
+      const node = unitMap.get(id);
+      if (!node) return prev;
+
+      if (newSelected.has(id)) {
+        // Deselect node and all children
+        newSelected.delete(id);
+        getAllChildrenIds(node).forEach((cid) => newSelected.delete(cid));
+      } else {
+        // Select node and all parents
+        newSelected.add(id);
+        let current = node;
+        while (current.parentId) {
+          newSelected.add(current.parentId);
+          current = unitMap.get(current.parentId)!;
+        }
+      }
+
+      return Array.from(newSelected);
+    });
+  };
+
+  const getLowestSelected = (): number[] => {
+    const selectedSet = new Set(selectedOrgUnitIds);
+    const leaves: number[] = [];
+
+    const dfs = (node: OrgUnitNode) => {
+      if (selectedSet.has(node.id)) {
+        const hasSelectedChild = node.children.some((c) =>
+          selectedSet.has(c.id)
+        );
+        if (!hasSelectedChild) leaves.push(node.id);
+      }
+      node.children.forEach(dfs);
+    };
+
+    orgUnitTree.forEach(dfs);
+    return leaves;
+  };
+
+  const OrgUnitCheckboxTree = ({ units }: { units: OrgUnitNode[] }) => {
     return (
       <ul className="pl-4 space-y-1">
         {units.map((unit) => {
           const hasChildren = !!unit.children?.length;
           const isExpanded = expandedNodes.has(unit.id);
-          const isDisabled = !assignedOrgUnitIds.includes(unit.id);
+          const isChecked = selectedOrgUnitIds.includes(unit.id);
 
           return (
             <li key={unit.id}>
               <div className="flex items-center gap-2">
                 {hasChildren ? (
-                  <button type="button" onClick={() => toggleNode(unit.id)}>
+                  <button onClick={() => toggleNode(unit.id)}>
                     {isExpanded ? <ChevronDown /> : <ChevronRight />}
                   </button>
                 ) : (
                   <div className="w-4 h-4" />
                 )}
                 <Checkbox
-                  checked={selectedOrgUnitId === unit.id}
-                  onCheckedChange={() => {
-                    if (!isDisabled) setSelectedOrgUnitId(unit.id);
-                  }}
-                  disabled={isDisabled}
+                  checked={isChecked}
+                  onCheckedChange={() => handleSelect(unit.id)}
                 />
-                <span
-                  className={cn("text-sm", {
-                    "text-muted-foreground": isDisabled,
-                  })}
-                >
-                  {unit.name}
-                </span>
+                <span className="text-sm">{unit.name}</span>
               </div>
               {hasChildren && isExpanded && (
-                <OrgUnitRadioTree units={unit.children} />
+                <OrgUnitCheckboxTree units={unit.children} />
               )}
             </li>
           );
@@ -114,26 +206,16 @@ export default function EditNoticeForm({
     );
   };
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const handleUpdate = async () => {
-    if (!title || !date || !selectedOrgUnitId) {
+    if (!title || !date || selectedOrgUnitIds.length === 0) {
       toast.error("Please fill all required fields.");
-      return;
-    }
-
-    if (!assignedOrgUnitIds.includes(selectedOrgUnitId)) {
-      toast.error("You can only assign notices to your own org units.");
       return;
     }
 
     setIsSubmitting(true);
     try {
       let updatedFileUrl = fileUrl;
-
-      if (fileDeleted) {
-        updatedFileUrl = null;
-      }
+      if (fileDeleted) updatedFileUrl = null;
 
       if (file) {
         const form = new FormData();
@@ -150,11 +232,11 @@ export default function EditNoticeForm({
         body: JSON.stringify({
           title,
           description,
-          orgUnitId: selectedOrgUnitId,
+          orgUnitIds: getLowestSelected(),
           expiredAt: date.toISOString(),
           fileUrl: updatedFileUrl,
-          type, // <--- send type
-          isActive, // <--- send isActive
+          type,
+          isActive,
         }),
       });
 
@@ -163,7 +245,7 @@ export default function EditNoticeForm({
         onSuccess();
       } else {
         const error = await res.json();
-        throw new Error(error.error || "Failed to update.");
+        throw new Error(error.error || "Failed to update notice.");
       }
     } catch (err: any) {
       toast.error(err.message);
@@ -173,7 +255,7 @@ export default function EditNoticeForm({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-xl">
       <div className="flex items-center space-x-2">
         <Switch
           checked={isActive}
@@ -182,10 +264,12 @@ export default function EditNoticeForm({
         />
         <Label htmlFor="notice-active">Active</Label>
       </div>
+
       <div>
         <Label>Title</Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
+
       <div>
         <Label>Description</Label>
         <Textarea
@@ -193,16 +277,18 @@ export default function EditNoticeForm({
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
+
       <div>
-        <Label>Org Unit</Label>
+        <Label>Select Org Units</Label>
         {orgUnitTree.length === 0 ? (
           <p className="text-sm text-muted-foreground">Loading org units...</p>
         ) : (
-          <OrgUnitRadioTree units={orgUnitTree} />
+          <OrgUnitCheckboxTree units={orgUnitTree} />
         )}
       </div>
+
       <div>
-        <Label>Type</Label>
+        <Label>Notice Type</Label>
         <Select value={type} onValueChange={setType}>
           <SelectTrigger>
             <SelectValue placeholder="Select type" />
@@ -215,7 +301,6 @@ export default function EditNoticeForm({
         </Select>
       </div>
 
-      {/* File Section */}
       <div>
         <Label>Attachment</Label>
         {fileUrl && !fileDeleted ? (
@@ -254,7 +339,6 @@ export default function EditNoticeForm({
             }}
           />
         )}
-
         {preview && (
           <div className="mt-2">
             <img
