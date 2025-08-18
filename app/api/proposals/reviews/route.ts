@@ -1,149 +1,104 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma"; // adjust path if needed
+import { prisma } from "@/lib/prisma";
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const userId = Number(searchParams.get("userId"));
-    const page = Number(searchParams.get("page") || "1");
-    const pageSize = Number(searchParams.get("pageSize") || "10");
-    const filter = searchParams.get("filter") || "";
-
-    if (!userId) {
-      return NextResponse.json({ error: "userId is required" }, { status: 400 });
-    }
-
-    const skip = (page - 1) * pageSize;
-
-    // Fetch all proposals matching the filter
-    const proposals = await prisma.submitProposal.findMany({
-      where: {
-        title: { contains: filter, mode: "insensitive" },
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        notice: { select: { type: true } },
-        versions: {
-          orderBy: { versionNumber: "desc" }, // latest version first
-          include: {
-            reviews: {
-              include: { reviewer: { select: { id: true, fullName: true } } },
-            },
-          },
-        },
-        submittedBy: { select: { fullName: true } },
-        orgUnit: { select: { name: true } },
-        finalDecision: { include: { decidedBy: { select: { id: true, fullName: true } } } },
-      },
-    });
-
-    // Filter: only keep proposals where the user is assigned to the latest version
-    const filtered = proposals.filter((p) => {
-      const latestVersion = p.versions[0];
-      return latestVersion.reviews.some((r) => r.reviewerId === userId);
-    });
-
-    // Pagination
-    const paginated = filtered.slice(skip, skip + pageSize);
-
-    // Map to frontend shape
-    const mapped = paginated.map((p) => ({
-      id: p.id,
-      title: p.title,
-      submittedBy: p.submittedBy.fullName,
-      orgUnitName: p.orgUnit.name,
-      createdAt: p.createdAt.toISOString(),
-      noticeType: p.notice.type,
-      versions: p.versions.map((v) => ({
-        id: v.id,
-        versionNumber: v.versionNumber,
-        title: v.title,
-        description: v.description,
-        participants: v.participants,
-        fileUrl: v.fileUrl,
-        createdAt: v.createdAt.toISOString(),
-        resubmitAllowed: v.resubmitAllowed,
-        reviews: v.reviews.map((r) => ({
-          id: r.id,
-          reviewerId: r.reviewerId,
-          reviewerName: r.reviewer.fullName,
-          status: r.status,
-          comments: r.comments || "",
-          createdAt: r.createdAt.toISOString(),
-        })),
-      })),
-      finalDecision: p.finalDecision
-        ? {
-            status: p.finalDecision.status,
-            reason: p.finalDecision.reason,
-            decidedBy: {
-              id: p.finalDecision.decidedBy.id,
-              fullName: p.finalDecision.decidedBy.fullName,
-            },
-            decidedAt: p.finalDecision.decidedAt.toISOString(),
-          }
-        : null,
-    }));
-
-    return NextResponse.json({
-      proposals: mapped,
-      totalCount: filtered.length,
-    });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
-  }
+interface ReqBody {
+  title: string;
+  description?: string;
+  participants: string[];
+  fileUrl?: string;
 }
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const body = await request.json();
-    const { proposalVersionId, reviewerId, status, comments } = body;
-
-    if (!proposalVersionId || !reviewerId || !status) {
+    const submitProposalId = Number(params.id);
+    if (isNaN(submitProposalId)) {
       return NextResponse.json(
-        { error: "proposalVersionId, reviewerId and status are required" },
+        { error: "Invalid proposal ID" },
         { status: 400 }
       );
     }
 
-    // Upsert review: if review exists update, else create new
-    const existingReview = await prisma.proposalReview.findUnique({
-      where: {
-        proposalVersionId_reviewerId: {
-          proposalVersionId,
-          reviewerId,
-        },
+    const body: ReqBody = await request.json();
+    const { title, description, participants, fileUrl } = body;
+
+    if (!title || !participants || participants.length === 0) {
+      return NextResponse.json(
+        { error: "Title and participants are required" },
+        { status: 400 }
+      );
+    }
+
+    // Find the submit proposal to ensure it exists
+    const existingSubmitProposal = await prisma.submitProposal.findUnique({
+      where: { id: submitProposalId },
+      include: { versions: true },
+    });
+
+    if (!existingSubmitProposal) {
+      return NextResponse.json(
+        { error: "SubmitProposal not found" },
+        { status: 404 }
+      );
+    }
+
+    // Determine next version number
+    const latestVersionNumber =
+      existingSubmitProposal.versions.reduce(
+        (max, v) => (v.versionNumber > max ? v.versionNumber : max),
+        0
+      ) || 0;
+    const nextVersionNumber = latestVersionNumber + 1;
+
+    // Create new ProposalVersion linked to the SubmitProposal
+    const newVersion = await prisma.proposalVersion.create({
+      data: {
+        submitProposalId,
+        versionNumber: nextVersionNumber,
+        title,
+        description,
+        participants,
+        fileUrl,
       },
     });
 
-    if (existingReview) {
-      await prisma.proposalReview.update({
-        where: {
-          id: existingReview.id,
-        },
-        data: {
-          status,
-          comments,
-          createdAt: new Date(), // update timestamp (or use updatedAt if you add one)
-        },
+    // Copy latest version's reviewers to new version (default status: PENDING)
+    const latestVersion =
+      existingSubmitProposal.versions.reduce(
+        (max, v) => (v.versionNumber > max.versionNumber ? v : max),
+        existingSubmitProposal.versions[0]
+      );
+
+    if (latestVersion) {
+      const latestReviews = await prisma.proposalReview.findMany({
+        where: { proposalVersionId: latestVersion.id },
       });
-    } else {
-      await prisma.proposalReview.create({
-        data: {
-          proposalVersionId,
-          reviewerId,
-          status,
-          comments,
-        },
-      });
+
+      if (latestReviews.length > 0) {
+        await prisma.proposalReview.createMany({
+          data: latestReviews.map((r) => ({
+            proposalVersionId: newVersion.id,
+            reviewerId: r.reviewerId,
+            status: "PENDING", // default status
+            comments: "",       // reset comments
+          })),
+        });
+      }
     }
 
-    return NextResponse.json({ message: "Review saved successfully" });
+    // Update updatedAt timestamp on SubmitProposal
+    await prisma.submitProposal.update({
+      where: { id: submitProposalId },
+      data: { updatedAt: new Date() },
+    });
+
+    return NextResponse.json({ message: "Proposal resubmitted successfully" });
   } catch (error) {
-    console.error(error);
+    console.error("Error resubmitting proposal:", error);
     return NextResponse.json(
-      { error: "Failed to save review" },
+      { error: "Failed to resubmit proposal" },
       { status: 500 }
     );
   }

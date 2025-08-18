@@ -82,17 +82,23 @@ export default function MySubmissions({ userId }: Props) {
     if (!submission.versions.length)
       return { latestVersion: null, needsModification: false };
 
-    // Get the latest version
     const latestVersion = submission.versions.reduce(
       (prev, current) =>
         current.versionNumber > prev.versionNumber ? current : prev,
       submission.versions[0]
     );
 
-    // Check if **any review** has status NEEDS_MODIFICATION
-    const needsModification = latestVersion.reviews.some(
-      (review) => review.status.toUpperCase() === "NEEDS_MODIFICATION"
+    if (!latestVersion.reviews.length)
+      return { latestVersion, needsModification: false };
+
+    const latestReview = latestVersion.reviews.reduce(
+      (prev, current) =>
+        new Date(current.createdAt) > new Date(prev.createdAt) ? current : prev,
+      latestVersion.reviews[0]
     );
+
+    const needsModification =
+      latestReview.status.toUpperCase() === "NEEDS_MODIFICATION";
 
     return { latestVersion, needsModification };
   }

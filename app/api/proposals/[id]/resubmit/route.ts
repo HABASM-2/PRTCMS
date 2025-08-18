@@ -8,17 +8,11 @@ interface ReqBody {
   fileUrl?: string;
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const submitProposalId = Number(params.id);
     if (isNaN(submitProposalId)) {
-      return NextResponse.json(
-        { error: "Invalid proposal ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid proposal ID" }, { status: 400 });
     }
 
     const body: ReqBody = await request.json();
@@ -38,10 +32,7 @@ export async function POST(
     });
 
     if (!existingSubmitProposal) {
-      return NextResponse.json(
-        { error: "SubmitProposal not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "SubmitProposal not found" }, { status: 404 });
     }
 
     // Determine next version number
@@ -52,7 +43,8 @@ export async function POST(
       ) || 0;
     const nextVersionNumber = latestVersionNumber + 1;
 
-    // Create new ProposalVersion linked to the SubmitProposal
+        // Create new ProposalVersion linked to the SubmitProposal
+        // After creating new ProposalVersion
     const newVersion = await prisma.proposalVersion.create({
       data: {
         submitProposalId,
@@ -64,34 +56,31 @@ export async function POST(
       },
     });
 
-    // Copy latest version's reviewers to new version (default status: PENDING)
-    const latestVersion =
-      existingSubmitProposal.versions.reduce(
-        (max, v) => (v.versionNumber > max.versionNumber ? v : max),
-        existingSubmitProposal.versions[0]
-      );
+    // Copy latest version's reviewers to new version if exists
+    const latestVersion = existingSubmitProposal.versions.reduce((max, v) => (v.versionNumber > max.versionNumber ? v : max), existingSubmitProposal.versions[0]);
 
     if (latestVersion) {
       const latestReviews = await prisma.proposalReview.findMany({
         where: { proposalVersionId: latestVersion.id },
       });
 
-      if (latestReviews.length > 0) {
-        await prisma.proposalReview.createMany({
-          data: latestReviews.map((r) => ({
-            proposalVersionId: newVersion.id,
-            reviewerId: r.reviewerId,
-            status: "PENDING", // default status
-            comments: "",       // reset comments
-          })),
-        });
-      }
+      await prisma.proposalReview.createMany({
+        data: latestReviews.map((r) => ({
+          proposalVersionId: newVersion.id,
+          reviewerId: r.reviewerId,
+          status: r.status,
+          comments: r.comments,
+          createdAt: r.createdAt,
+        })),
+      });
     }
 
     // Update updatedAt timestamp on SubmitProposal
     await prisma.submitProposal.update({
       where: { id: submitProposalId },
-      data: { updatedAt: new Date() },
+      data: {
+        updatedAt: new Date(),
+      },
     });
 
     return NextResponse.json({ message: "Proposal resubmitted successfully" });
