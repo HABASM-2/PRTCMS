@@ -10,134 +10,44 @@ export async function GET(request: Request) {
     const filter = searchParams.get("filter") || "";
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
     const skip = (page - 1) * pageSize;
 
-    // Count total matching proposals
-    const totalCount = await prisma.submitProposal.count({
-      where: {
-        title: {
-          contains: filter,
-          mode: "insensitive",
-        },
-        OR: [
-          {
-            versions: {
-              some: {
-                reviews: {
-                  some: {
-                    reviewerId: userId,
-                  },
-                },
-              },
-            },
-          },
-          {
-            versions: {
-              some: {
-                NOT: {
-                  reviews: {
-                    some: {
-                      reviewerId: userId,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        ],
-      },
-    });
-
-    // Fetch proposals with pagination, including versions and reviews
+    // Fetch all proposals matching the filter
     const proposals = await prisma.submitProposal.findMany({
       where: {
-        title: {
-          contains: filter,
-          mode: "insensitive",
-        },
-        OR: [
-          {
-            versions: {
-              some: {
-                reviews: {
-                  some: {
-                    reviewerId: userId,
-                  },
-                },
-              },
-            },
-          },
-          {
-            versions: {
-              some: {
-                NOT: {
-                  reviews: {
-                    some: {
-                      reviewerId: userId,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        ],
+        title: { contains: filter, mode: "insensitive" },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
-      skip,
-      take: pageSize,
+      orderBy: { createdAt: "desc" },
       include: {
-        notice: { // <-- ADD THIS
-          select: {
-            type: true,
-          },
-        },
+        notice: { select: { type: true } },
         versions: {
+          orderBy: { versionNumber: "desc" }, // latest version first
           include: {
             reviews: {
-              include: {
-                reviewer: {
-                  select: {
-                    id: true,
-                    fullName: true,
-                  },
-                },
-              },
+              include: { reviewer: { select: { id: true, fullName: true } } },
             },
           },
         },
-        submittedBy: {
-          select: {
-            fullName: true,
-          },
-        },
-        orgUnit: {
-          select: {
-            name: true,
-          },
-        },
-        finalDecision: {  // <-- add this include to fetch final decision
-          include: {
-            decidedBy: {
-              select: {
-                id: true,
-                fullName: true,
-              },
-            },
-          },
-        },
+        submittedBy: { select: { fullName: true } },
+        orgUnit: { select: { name: true } },
+        finalDecision: { include: { decidedBy: { select: { id: true, fullName: true } } } },
       },
     });
 
-    // Map to expected frontend shape
-    const mapped = proposals.map((p) => ({
+    // Filter: only keep proposals where the user is assigned to the latest version
+    const filtered = proposals.filter((p) => {
+      const latestVersion = p.versions[0];
+      return latestVersion.reviews.some((r) => r.reviewerId === userId);
+    });
+
+    // Pagination
+    const paginated = filtered.slice(skip, skip + pageSize);
+
+    // Map to frontend shape
+    const mapped = paginated.map((p) => ({
       id: p.id,
       title: p.title,
       submittedBy: p.submittedBy.fullName,
@@ -177,14 +87,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       proposals: mapped,
-      totalCount,
+      totalCount: filtered.length,
     });
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 

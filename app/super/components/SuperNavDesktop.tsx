@@ -49,7 +49,7 @@ const navItems = [
     name: "Proposals",
     href: "/super/proposals",
     icon: Paperclip,
-    roles: ["user", "manager", "dean"],
+    roles: ["user", "manager", "dean", "head", "coordinator"],
   },
   {
     name: "Settings",

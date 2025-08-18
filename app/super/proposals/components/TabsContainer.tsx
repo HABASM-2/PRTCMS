@@ -17,12 +17,12 @@ export default async function TabsContainer() {
 
   // Role-based access
   const canSubmitProposal = roleNames.includes("user"); // ✅ Only "user" role can submit
+  const canViewStatus = roleNames.includes("coordinator"); // Status tab
 
   // Default tab logic
   let defaultTab = "view";
-  if (canSubmitProposal) {
-    defaultTab = "submit";
-  }
+  if (canSubmitProposal) defaultTab = "submit";
+  else if (canViewStatus) defaultTab = "status";
 
   return (
     <Tabs defaultValue={defaultTab} className="w-full">
@@ -31,7 +31,7 @@ export default async function TabsContainer() {
           <TabsTrigger value="submit">Submit Proposal</TabsTrigger>
         )}
         <TabsTrigger value="view">View Proposals</TabsTrigger>
-        <TabsTrigger value="status">Status</TabsTrigger>
+        {canViewStatus && <TabsTrigger value="status">Status</TabsTrigger>}
         <TabsTrigger value="review">Review Proposals</TabsTrigger>
       </TabsList>
 
@@ -57,9 +57,11 @@ export default async function TabsContainer() {
         <ViewProposals userId={Number(userId)} />
       </TabsContent>
 
-      <TabsContent value="status">
-        <StatusProposals />
-      </TabsContent>
+      {canViewStatus && (
+        <TabsContent value="status">
+          <StatusProposals />
+        </TabsContent>
+      )}
 
       <TabsContent value="review">
         <ReviewProposals userId={Number(userId)} />

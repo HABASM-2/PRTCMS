@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -17,8 +18,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Eye, Loader2, UserPlus2, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Eye, Loader2, Send, UserPlus2 } from "lucide-react";
 
 interface Proposal {
   id: number;
@@ -40,81 +42,144 @@ interface Reviewer {
 
 export default function ViewProposals({ userId }: { userId: number }) {
   const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [forwardedProposals, setForwardedProposals] = useState<number[]>([]);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<Proposal | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  const [forwardingProposalId, setForwardingProposalId] = useState<
+    number | null
+  >(null);
   const [assigningProposalId, setAssigningProposalId] = useState<number | null>(
     null
   );
+
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [reviewerSearch, setReviewerSearch] = useState("");
-  const [selectedReviewers, setSelectedReviewers] = useState<
-    Record<number, Reviewer[]>
-  >({});
+  const [selectedReviewers, setSelectedReviewers] = useState<number[]>([]);
+  const [reviewerFilter, setReviewerFilter] = useState("");
+
+  const [loadingChips, setLoadingChips] = useState<number[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
 
   const pageSize = 5;
 
+  // Fetch proposals + forwarded status
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/proposals")
-      .then((res) => res.json())
-      .then((data) => setProposals(data))
-      .catch((err) => console.error("Failed to load proposals", err))
-      .finally(() => setLoading(false));
+    const fetchProposals = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/proposals");
+        const data: Proposal[] = await res.json();
+        setProposals(data);
+
+        // Fetch forward status for all proposals at once
+        const statuses = await Promise.all(
+          data.map(async (proposal) => {
+            const fRes = await fetch(`/api/proposals/${proposal.id}/forward`);
+            const fData: { forwarded: boolean } = await fRes.json();
+            return fData.forwarded ? Number(proposal.id) : null; // ensure number
+          })
+        );
+
+        setForwardedProposals(statuses.filter(Boolean) as number[]);
+      } catch (err) {
+        console.error("Error fetching proposals:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProposals();
   }, []);
 
-  const loadReviewers = async () => {
-    setLoadingUsers(true);
+  // Fetch all reviewers
+  const fetchReviewers = async () => {
+    setLoadingList(true);
     try {
       const res = await fetch("/api/users/reviewers");
-      const data = await res.json();
-      setReviewers(data);
-    } catch (error) {
-      console.error("Failed to load reviewers", error);
+      const data: Reviewer[] = await res.json();
+      setReviewers(data.filter((r) => r.id !== userId));
+    } catch (err) {
+      console.error(err);
     } finally {
-      setLoadingUsers(false);
+      setLoadingList(false);
     }
   };
 
-  const assignReviewers = async (proposalId: number) => {
-    const selected = selectedReviewers[proposalId] || [];
-    const reviewerIds = selected.map((r) => r.id);
+  // Fetch assigned reviewers for a proposal
+  const fetchAssignedReviewers = async (proposalId: number) => {
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/assignrev`);
+      const data: Reviewer[] = await res.json();
+      setSelectedReviewers(data.map((r) => Number(r.id)));
+    } catch (err) {
+      console.error(err);
+      setSelectedReviewers([]);
+    }
+  };
 
+  // Assign or remove reviewer
+  const toggleReviewer = async (
+    proposalId: number,
+    reviewerId: number,
+    assign: boolean
+  ) => {
+    setLoadingChips((prev) => [...prev, reviewerId]);
     try {
       const res = await fetch(`/api/proposals/${proposalId}/assignrev`, {
-        method: "POST",
+        method: assign ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewerIds }),
+        body: JSON.stringify({
+          reviewerIds: assign ? [reviewerId] : undefined,
+          reviewerId,
+          removeFromOrgUnit: !assign,
+        }),
       });
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error("Assign reviewers failed:", res.status, errorText);
-        throw new Error("Failed to assign reviewers");
+        console.error("Failed to update reviewer:", errorText);
+        alert("Failed to update reviewer");
+      } else {
+        if (assigningProposalId) {
+          await fetchAssignedReviewers(assigningProposalId);
+        }
       }
-
-      alert("Reviewers assigned successfully");
-      setAssigningProposalId(null);
-      setSelectedReviewers((prev) => ({ ...prev, [proposalId]: [] }));
     } catch (err) {
       console.error(err);
-      alert("Error assigning reviewers");
+      alert("Error updating reviewer");
+    } finally {
+      setLoadingChips((prev) => prev.filter((id) => id !== reviewerId));
     }
   };
 
-  const toggleReviewer = (proposalId: number, reviewer: Reviewer) => {
-    setSelectedReviewers((prev) => {
-      const current = prev[proposalId] || [];
-      const exists = current.find((r) => r.id === reviewer.id);
-      return {
-        ...prev,
-        [proposalId]: exists
-          ? current.filter((r) => r.id !== reviewer.id)
-          : [...current, reviewer],
-      };
-    });
+  // Forward proposal
+  const handleForward = async (proposalId: number) => {
+    setForwardingProposalId(proposalId);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/forward`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": userId.toString(),
+        },
+        body: JSON.stringify({ remarks: "" }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to forward proposal");
+      } else {
+        // Mark as forwarded immediately
+        setForwardedProposals((prev) => [...prev, proposalId]);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error forwarding proposal");
+    } finally {
+      setForwardingProposalId(null);
+    }
   };
 
   const filtered = proposals.filter((p) =>
@@ -122,10 +187,6 @@ export default function ViewProposals({ userId }: { userId: number }) {
   );
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
   const totalPages = Math.ceil(filtered.length / pageSize);
-
-  const filteredReviewers = reviewers.filter((r) =>
-    r.fullName.toLowerCase().includes(reviewerSearch.toLowerCase())
-  );
 
   return (
     <div className="space-y-4">
@@ -154,162 +215,205 @@ export default function ViewProposals({ userId }: { userId: number }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginated.map((proposal) => (
-                <TableRow key={proposal.id}>
-                  <TableCell>{proposal.title}</TableCell>
-                  <TableCell>{proposal.submittedBy}</TableCell>
-                  <TableCell>{proposal.orgUnit}</TableCell>
-                  <TableCell>{proposal.noticeType ?? "N/A"}</TableCell>
-                  <TableCell>{proposal.submittedAt}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    {/* View Dialog */}
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setSelected(proposal)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>{selected?.title}</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-2 text-sm">
-                          <p>
-                            <strong>Submitted By:</strong>{" "}
-                            {selected?.submittedBy}
-                          </p>
-                          <p>
-                            <strong>Org Unit:</strong> {selected?.orgUnit}
-                          </p>
-                          <p>
-                            <strong>Participants:</strong>{" "}
-                            {selected?.participants}
-                          </p>
-                          <p>
-                            <strong>Notice Type:</strong>{" "}
-                            {selected?.noticeType ?? "N/A"}
-                          </p>
-                          <p>
-                            <strong>Submitted At:</strong>{" "}
-                            {selected?.submittedAt}
-                          </p>
-                          {selected?.description && (
-                            <p>
-                              <strong>Description:</strong>{" "}
-                              {selected.description}
-                            </p>
-                          )}
-                          {selected?.fileUrl && (
-                            <p>
-                              <strong>File:</strong>{" "}
-                              <a
-                                className="text-blue-600 underline"
-                                href={selected.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                View Attachment
-                              </a>
-                            </p>
-                          )}
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+              {paginated.map((proposal) => {
+                const isForwarded = forwardedProposals.includes(
+                  Number(proposal.id)
+                );
 
-                    {/* Assign Reviewers Dialog */}
-                    <Dialog
-                      open={assigningProposalId === proposal.id}
-                      onOpenChange={(open) => {
-                        setAssigningProposalId(open ? proposal.id : null);
-                        if (open) {
-                          setReviewerSearch("");
-                          loadReviewers();
-                        }
-                      }}
-                    >
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <UserPlus2 className="w-4 h-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Assign Reviewers</DialogTitle>
-                        </DialogHeader>
-
-                        <div className="space-y-3">
-                          <Input
-                            placeholder="Search reviewer"
-                            value={reviewerSearch}
-                            onChange={(e) => setReviewerSearch(e.target.value)}
-                          />
-
-                          {/* Selected Reviewers as Chips */}
-                          <div className="flex flex-wrap gap-2">
-                            {(selectedReviewers[proposal.id] || []).map((r) => (
-                              <div
-                                key={r.id}
-                                className="flex items-center bg-muted px-2 py-1 rounded-full text-sm"
-                              >
-                                {r.fullName}
-                                <button
-                                  onClick={() => toggleReviewer(proposal.id, r)}
-                                  className="ml-1 text-muted-foreground hover:text-foreground"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-
-                          {loadingUsers ? (
-                            <div className="text-sm text-muted-foreground">
-                              Loading reviewers...
-                            </div>
-                          ) : (
-                            <div className="max-h-60 overflow-y-auto border rounded-md divide-y">
-                              {filteredReviewers.map((user) => (
-                                <div
-                                  key={user.id}
-                                  className="p-2 hover:bg-accent cursor-pointer"
-                                  onClick={() =>
-                                    toggleReviewer(proposal.id, user)
-                                  }
-                                >
-                                  <div className="font-medium">
-                                    {user.fullName}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {user.email}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          <Button
-                            className="mt-3"
-                            disabled={
-                              (selectedReviewers[proposal.id] || []).length ===
-                              0
-                            }
-                            onClick={() => assignReviewers(proposal.id)}
-                          >
-                            Assign Reviewer(s)
+                return (
+                  <TableRow key={proposal.id}>
+                    <TableCell>{proposal.title}</TableCell>
+                    <TableCell>{proposal.submittedBy}</TableCell>
+                    <TableCell>{proposal.orgUnit}</TableCell>
+                    <TableCell>{proposal.noticeType ?? "N/A"}</TableCell>
+                    <TableCell>{proposal.submittedAt}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      {/* View Proposal */}
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <Eye className="w-4 h-4" />
                           </Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </TableCell>
-                </TableRow>
-              ))}
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{proposal.title}</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-2 text-sm">
+                            <p>
+                              <strong>Submitted By:</strong>{" "}
+                              {proposal.submittedBy}
+                            </p>
+                            <p>
+                              <strong>Org Unit:</strong> {proposal.orgUnit}
+                            </p>
+                            <p>
+                              <strong>Participants:</strong>{" "}
+                              {proposal.participants}
+                            </p>
+                            <p>
+                              <strong>Notice Type:</strong>{" "}
+                              {proposal.noticeType ?? "N/A"}
+                            </p>
+                            <p>
+                              <strong>Submitted At:</strong>{" "}
+                              {proposal.submittedAt}
+                            </p>
+                            {proposal.description && (
+                              <p>
+                                <strong>Description:</strong>{" "}
+                                {proposal.description}
+                              </p>
+                            )}
+                            {proposal.fileUrl && (
+                              <p>
+                                <strong>File:</strong>{" "}
+                                <a
+                                  className="text-blue-600 underline"
+                                  href={proposal.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  View Attachment
+                                </a>
+                              </p>
+                            )}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+
+                      {/* Forward Proposal */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleForward(proposal.id)}
+                        disabled={
+                          isForwarded || forwardingProposalId === proposal.id
+                        }
+                      >
+                        {forwardingProposalId === proposal.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </Button>
+
+                      {/* Assign Reviewers */}
+                      <Dialog
+                        open={assigningProposalId === proposal.id}
+                        onOpenChange={async (open) => {
+                          if (isForwarded) return; // disable if forwarded
+                          setAssigningProposalId(open ? proposal.id : null);
+                          if (open) {
+                            await fetchReviewers();
+                            await fetchAssignedReviewers(proposal.id);
+                          } else {
+                            setReviewerFilter("");
+                          }
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={isForwarded}
+                          >
+                            <UserPlus2 className="w-4 h-4" />
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Assign Reviewers</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-2">
+                            {/* Assigned reviewers */}
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              {selectedReviewers.map((id) => {
+                                const rev = reviewers.find((r) => r.id === id);
+                                if (!rev) return null;
+                                return (
+                                  <Badge
+                                    key={id}
+                                    variant="secondary"
+                                    className="cursor-pointer flex items-center gap-1"
+                                    onClick={() =>
+                                      toggleReviewer(proposal.id, id, false)
+                                    }
+                                  >
+                                    {loadingChips.includes(id) ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      rev.fullName
+                                    )}
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+
+                            {/* Reviewer search */}
+                            <Input
+                              placeholder="Search reviewers..."
+                              value={reviewerFilter}
+                              onChange={(e) =>
+                                setReviewerFilter(e.target.value)
+                              }
+                              className="mb-2"
+                            />
+
+                            {/* Reviewer list */}
+                            <div className="max-h-60 overflow-y-auto space-y-1">
+                              {loadingList ? (
+                                <div className="flex justify-center py-4">
+                                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                </div>
+                              ) : (
+                                reviewers
+                                  .filter(
+                                    (rev) =>
+                                      rev.fullName
+                                        .toLowerCase()
+                                        .includes(
+                                          reviewerFilter.toLowerCase()
+                                        ) ||
+                                      rev.email
+                                        .toLowerCase()
+                                        .includes(reviewerFilter.toLowerCase())
+                                  )
+                                  .map((rev) => (
+                                    <div
+                                      key={rev.id}
+                                      className="flex items-center space-x-2"
+                                    >
+                                      <Checkbox
+                                        checked={selectedReviewers.includes(
+                                          rev.id
+                                        )}
+                                        onCheckedChange={(checked) =>
+                                          toggleReviewer(
+                                            proposal.id,
+                                            rev.id,
+                                            !!checked
+                                          )
+                                        }
+                                      />
+                                      <span>
+                                        {rev.fullName} ({rev.email})
+                                      </span>
+                                    </div>
+                                  ))
+                              )}
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
 
+          {/* Pagination */}
           <div className="flex items-center justify-between pt-2">
             <span className="text-sm text-muted-foreground">
               Page {page} of {totalPages}

@@ -63,6 +63,9 @@ export default function ProposalDetailsModal({
   const [changeTypeReason, setChangeTypeReason] = useState("");
   const [changingType, setChangingType] = useState(false);
 
+  const latestVersionval = proposal?.versions?.[proposal.versions.length - 1];
+  // console.log("Here is the latest version values man", latestVersionval);
+
   const debouncedSetReviewerSearch = useCallback(
     debounce((val: string) => {
       setReviewerSearch(val);
@@ -533,7 +536,7 @@ export default function ProposalDetailsModal({
 
                   {/* Final decision */}
                   <div className="pt-4 border-t flex gap-2">
-                    {proposal.proposalType === "CONCEPT_NOTE" ? (
+                    {latestVersionval?.versionType === "CONCEPT_NOTE" ? (
                       <>
                         <Button
                           variant="destructive"

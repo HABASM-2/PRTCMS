@@ -54,6 +54,9 @@ model User {
   // Relation for ProposalNoticeForward
   forwardedNotices ProposalNoticeForward[] @relation("UserForwarded")
   receivedNotices  ProposalNoticeForward[] @relation("UserReceived")
+
+  // Relation for ProposalForwarding (as forwarder)
+  forwardedProposals ProposalForwarding[] @relation("ProposalForwardedBy")
 }
 
 // ------------------- ActivityLog -------------------
@@ -85,6 +88,7 @@ model OrgUnit {
   SubmitProposal        SubmitProposal[]
   ProposalNoticeOrgUnit ProposalNoticeOrgUnit[]
   forwardedNotices      ProposalNoticeForward[]
+  ProposalForwarding    ProposalForwarding[]
 }
 
 // ------------------- SessionLog -------------------
@@ -100,10 +104,11 @@ model SessionLog {
 
 // ------------------- Role -------------------
 model Role {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  users     User[]   @relation("UserRoles")
-  createdAt DateTime @default(now())
+  id                 Int                  @id @default(autoincrement())
+  name               String               @unique
+  users              User[]               @relation("UserRoles")
+  createdAt          DateTime             @default(now())
+  ProposalForwarding ProposalForwarding[]
 }
 
 // ------------------- UserOrgUnit -------------------
@@ -197,13 +202,42 @@ model SubmitProposal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  versions      ProposalVersion[]
-  finalDecision FinalDecision?
+  versions           ProposalVersion[]
+  finalDecision      FinalDecision?
+  ProposalForwarding ProposalForwarding[]
 
   @@unique([submittedById, noticeId])
   @@index([submittedById])
   @@index([noticeId])
   @@index([orgUnitId])
+}
+
+model ProposalForwarding {
+  id Int @id @default(autoincrement())
+
+  // The proposal being forwarded
+  submitProposal   SubmitProposal @relation(fields: [submitProposalId], references: [id])
+  submitProposalId Int
+
+  // The Head who forwards
+  forwardedBy   User @relation("ProposalForwardedBy", fields: [forwardedById], references: [id])
+  forwardedById Int
+
+  // The OrgUnit and Role to which the proposal is forwarded
+  forwardedToOrgUnit   OrgUnit @relation(fields: [forwardedToOrgUnitId], references: [id])
+  forwardedToOrgUnitId Int
+
+  forwardedToRole   Role @relation(fields: [forwardedToRoleId], references: [id])
+  forwardedToRoleId Int
+
+  forwardedAt DateTime @default(now())
+  status      String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  remarks     String?
+
+  @@index([submitProposalId])
+  @@index([forwardedById])
+  @@index([forwardedToOrgUnitId])
+  @@index([forwardedToRoleId])
 }
 
 // ------------------- FinalDecision -------------------

@@ -1,3 +1,4 @@
+// /app/api/proposals/[id]/change-type/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -19,19 +20,18 @@ export async function POST(
       return NextResponse.json({ error: "Invalid proposal ID" }, { status: 400 });
     }
 
-    const { newType, comment } = await req.json();
-    if (!newType) {
-      return NextResponse.json({ error: "New type is required" }, { status: 400 });
-    }
+    const { comment } = await req.json();
 
-    // Fetch SubmitProposal with latest ProposalVersion
+    // Fetch SubmitProposal with latest version and its reviewers
     const submitProposal = await prisma.submitProposal.findUnique({
       where: { id: proposalId },
       include: {
-        notice: true,
         versions: {
           orderBy: { versionNumber: "desc" },
           take: 1,
+          include: {
+            reviews: { select: { reviewerId: true } },
+          },
         },
       },
     });
@@ -48,65 +48,70 @@ export async function POST(
       );
     }
 
-    // Update ProposalNotice.type
-    await prisma.proposalNotice.update({
-      where: { id: submitProposal.noticeId },
-      data: { type: newType },
-    });
-
-    // Find ProposalReview for current user & latest version
-    const proposalReview = await prisma.proposalReview.findUnique({
-      where: {
-        proposalVersionId_reviewerId: {
-          proposalVersionId: lastVersion.id,
-          reviewerId: currentUserId,
-        },
-      },
-    });
-
-    if (!proposalReview) {
-      return NextResponse.json(
-        { error: "No review found for current user on latest version" },
-        { status: 404 }
-      );
-    }
-
-    // Update review status to NEEDS_MODIFICATION
-    await prisma.proposalReview.update({
-      where: { id: proposalReview.id },
+    // Update latest version type and mark as resubmittable
+    const updatedVersion = await prisma.proposalVersion.update({
+      where: { id: lastVersion.id },
       data: {
-        status: "NEEDS_MODIFICATION",
+        type: "PROPOSAL",
+        resubmitAllowed: true,
       },
     });
 
-    // Create system change comment
-    await prisma.proposalReviewComment.create({
-      data: {
-        proposalReviewId: proposalReview.id,
-        authorId: currentUserId,
-        content: "[SYSTEM] Changed from concept note to proposal",
-      },
-    });
+    // Collect all previous reviewers + current user (avoid duplicates)
+    const oldReviewerIds = lastVersion.reviews.map((r) => r.reviewerId);
+    const allReviewerIds = Array.from(new Set([...oldReviewerIds, currentUserId]));
 
-    // Create user-provided reason comment if available
-    if (comment && comment.trim()) {
-      await prisma.proposalReviewComment.create({
-        data: {
-          proposalReviewId: proposalReview.id,
-          authorId: currentUserId,
-          content: comment.trim(),
+    // Create ProposalReview for any missing reviewers (skip if already exists)
+    for (const reviewerId of allReviewerIds) {
+      const existingReview = await prisma.proposalReview.findUnique({
+        where: {
+          proposalVersionId_reviewerId: {
+            proposalVersionId: lastVersion.id,
+            reviewerId,
+          },
         },
       });
+
+      if (!existingReview) {
+        const review = await prisma.proposalReview.create({
+          data: {
+            proposalVersionId: lastVersion.id,
+            reviewerId,
+            status: reviewerId === currentUserId ? "NEEDS_MODIFICATION" : "PENDING",
+          },
+        });
+
+        // Add system comment only for current user
+        if (reviewerId === currentUserId) {
+          await prisma.proposalReviewComment.create({
+            data: {
+              proposalReviewId: review.id,
+              authorId: currentUserId,
+              content: "[SYSTEM] Changed from Concept Note to Proposal",
+            },
+          });
+
+          if (comment?.trim()) {
+            await prisma.proposalReviewComment.create({
+              data: {
+                proposalReviewId: review.id,
+                authorId: currentUserId,
+                content: comment.trim(),
+              },
+            });
+          }
+        }
+      }
     }
 
     return NextResponse.json({
-      message:
-        "Proposal type updated, review status set to NEEDS_MODIFICATION, comments recorded",
+      message: "Latest version updated to PROPOSAL type, reviewers assigned",
+      versionId: updatedVersion.id,
     });
   } catch (err) {
     console.error(err);
     return NextResponse.json(
-      { error: "Failed to update type and add comment" },
+      { error: "Failed to update version and assign reviewers" },
       { status: 500 }
     );
   }

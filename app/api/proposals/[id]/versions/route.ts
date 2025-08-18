@@ -70,6 +70,7 @@ export async function GET(
         fileUrl: v.fileUrl,
         createdAt: v.createdAt.toISOString(),
         resubmitAllowed: v.resubmitAllowed,
+        versionType: v.type,
         reviews: v.reviews.map((r) => ({
           reviewerId: r.reviewerId,
           reviewerName: r.reviewer.fullName,
