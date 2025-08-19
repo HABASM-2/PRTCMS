@@ -5,6 +5,7 @@ import MySubmissions from "./MySubmissions";
 import ViewProposals from "./ViewProposals";
 import StatusProposals from "./StatusProposals";
 import ReviewProposals from "./ReviewProposals";
+import FinalizedProposals from "./FinalizedProposals"; // <-- New component
 import { auth } from "@/lib/auth";
 
 export default async function TabsContainer() {
@@ -18,6 +19,8 @@ export default async function TabsContainer() {
   // Role-based access
   const canSubmitProposal = roleNames.includes("user"); // ✅ Only "user" role can submit
   const canViewStatus = roleNames.includes("coordinator"); // Status tab
+  const canViewProposal = roleNames.includes("head");
+  const canViewFinalized = roleNames.includes("coordinator"); // Only coordinators can see finalized proposals
 
   // Default tab logic
   let defaultTab = "view";
@@ -30,14 +33,18 @@ export default async function TabsContainer() {
         {canSubmitProposal && (
           <TabsTrigger value="submit">Submit Proposal</TabsTrigger>
         )}
-        <TabsTrigger value="view">View Proposals</TabsTrigger>
+        {canViewProposal && (
+          <TabsTrigger value="view">View Proposals</TabsTrigger>
+        )}
         {canViewStatus && <TabsTrigger value="status">Status</TabsTrigger>}
+        {canViewFinalized && (
+          <TabsTrigger value="finalized">Finalized</TabsTrigger>
+        )}
         <TabsTrigger value="review">Review Proposals</TabsTrigger>
       </TabsList>
 
       {canSubmitProposal && (
         <TabsContent value="submit">
-          {/* Nested tabs inside Submit */}
           <Tabs defaultValue="new" className="mb-6">
             <TabsList>
               <TabsTrigger value="new">New Submission</TabsTrigger>
@@ -53,13 +60,21 @@ export default async function TabsContainer() {
         </TabsContent>
       )}
 
-      <TabsContent value="view">
-        <ViewProposals userId={Number(userId)} />
-      </TabsContent>
+      {canViewProposal && (
+        <TabsContent value="view">
+          <ViewProposals userId={Number(userId)} />
+        </TabsContent>
+      )}
 
       {canViewStatus && (
         <TabsContent value="status">
-          <StatusProposals />
+          <StatusProposals userId={Number(userId)} roles={roles} />
+        </TabsContent>
+      )}
+
+      {canViewFinalized && (
+        <TabsContent value="finalized">
+          <FinalizedProposals userId={Number(userId)} roles={roles} />
         </TabsContent>
       )}
 

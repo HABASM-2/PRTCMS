@@ -30,7 +30,7 @@ interface Props {
   roles: string[];
 }
 
-export default function StatusProposals({ userId, roles }: Props) {
+export default function FinalizedProposals({ userId, roles }: Props) {
   const [proposals, setProposals] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -42,12 +42,11 @@ export default function StatusProposals({ userId, roles }: Props) {
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
 
   const limit = 10;
-
   const fetchProposals = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/proposals/assigned?page=${page}&limit=${limit}&search=${encodeURIComponent(
+        `/api/proposals/finalized?page=${page}&limit=${limit}&search=${encodeURIComponent(
           search
         )}`
       );
@@ -109,7 +108,7 @@ export default function StatusProposals({ userId, roles }: Props) {
     <div className="space-y-4">
       {/* Search */}
       <Input
-        placeholder="Search proposals..."
+        placeholder="Search finalized proposals..."
         onChange={(e) => debouncedSetSearch(e.target.value)}
         className="max-w-sm"
       />
@@ -129,7 +128,7 @@ export default function StatusProposals({ userId, roles }: Props) {
               <TableHead>Title</TableHead>
               <TableHead>Submitted By</TableHead>
               <TableHead>Org Unit</TableHead>
-              <TableHead>Reviewers (Latest Version)</TableHead>
+              <TableHead>Final Decision</TableHead>
               <TableHead>Submitted At</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -144,11 +143,7 @@ export default function StatusProposals({ userId, roles }: Props) {
                 <TableCell>{p.submittedBy}</TableCell>
                 <TableCell>{p.orgUnit}</TableCell>
                 <TableCell>
-                  {p.reviewers.map((r: any) => (
-                    <div key={r.reviewerId} className="flex items-center gap-1">
-                      <span>{r.reviewerName}</span> {statusIcon(r.status)}
-                    </div>
-                  ))}
+                  {p.finalDecision ? statusIcon(p.finalDecision.status) : "-"}
                 </TableCell>
                 <TableCell>
                   {new Date(p.submittedAt).toLocaleDateString()}

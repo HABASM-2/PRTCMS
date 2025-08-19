@@ -27,6 +27,9 @@ export async function GET(
         },
         submittedBy: { select: { fullName: true } },
         orgUnit: { select: { name: true } },
+        finalDecision: {
+          include: { decidedBy: { select: { fullName: true } } },
+        },
         versions: {
           orderBy: { versionNumber: "asc" },
           include: {
@@ -61,6 +64,14 @@ export async function GET(
       orgUnit: proposal.orgUnit.name,
       submittedAt: proposal.createdAt.toISOString(),
       proposalType: proposal.notice?.type ?? "JUST_NOTICE",
+      finalDecision: proposal.finalDecision
+        ? {
+            status: proposal.finalDecision.status,              // ReviewStatus enum value
+            reason: proposal.finalDecision.reason,
+            decidedBy: proposal.finalDecision.decidedBy.fullName,
+            decidedAt: proposal.finalDecision.decidedAt.toISOString(),
+          }
+        : null,
       versions: proposal.versions.map((v) => ({
         id: v.id,
         versionNumber: v.versionNumber,

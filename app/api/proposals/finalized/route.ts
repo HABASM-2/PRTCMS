@@ -1,4 +1,4 @@
-// /app/api/proposals/assigned/route.ts
+// /app/api/proposals/finalized/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
@@ -12,13 +12,12 @@ export async function GET(req: Request) {
     }
 
     const userId = parseInt(session.user.id as string, 10);
-
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim() || "";
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
 
-    // Fetch user with roles
+    // Fetch coordinator with roles
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { roles: true },
@@ -28,17 +27,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ proposals: [], total: 0 });
     }
 
-    // Get coordinator role id
-    const coordinatorRole = user.roles.find(r => r.name.toLowerCase() === "coordinator");
+    const coordinatorRole = user.roles.find(
+      r => r.name.toLowerCase() === "coordinator"
+    );
 
-    // Get coordinator's OrgUnits
+    // Coordinator's orgUnits
     const userOrgUnits = await prisma.userOrgUnit.findMany({
       where: { userId },
       select: { orgUnitId: true },
     });
     const orgUnitIds = userOrgUnits.map(u => u.orgUnitId);
 
-    // Fetch forwarded proposals for coordinator in assigned OrgUnits
+    // Fetch forwarded proposals for coordinator
     const forwarded = await prisma.proposalForwarding.findMany({
       where: {
         forwardedToRoleId: coordinatorRole!.id,
@@ -49,19 +49,10 @@ export async function GET(req: Request) {
           include: {
             submittedBy: { select: { fullName: true } },
             orgUnit: { select: { name: true } },
-            finalDecision: true, // include finalDecision to check empty
-            versions: {
-              orderBy: { versionNumber: "desc" },
-              take: 1,
-              include: {
-                reviews: {
-                  include: {
-                    reviewer: { select: { id: true, fullName: true } },
-                  },
-                },
-              },
+            finalDecision: {
+              include: { decidedBy: { select: { fullName: true } } },
             },
-            notice: true, // include ProposalNotice to check consideredFor
+            notice: { select: { consideredFor: true } },
           },
         },
         forwardedBy: { select: { fullName: true } },
@@ -69,26 +60,34 @@ export async function GET(req: Request) {
       orderBy: { forwardedAt: "desc" },
     });
 
-    // Only include proposals where finalDecision is empty
-    const noFinalDecision = forwarded.filter(fwd => !fwd.submitProposal.finalDecision);
+    // Filter only proposals that already have a finalDecision
+    let filtered = forwarded.filter(fwd => fwd.submitProposal.finalDecision);
 
-    // Filter proposals by user's roles matching consideredFor
-    const userRoles = user.roles.map(r => r.name.toLowerCase());
-    const filteredByRole = noFinalDecision.filter(fwd => {
-      const considered = fwd.submitProposal.notice?.consideredFor;
-      if (!considered) return false;
+    // Filter by consideredFor based on coordinator’s roles
+    const roleNames = user.roles.map(r => r.name.toLowerCase());
+    const consideredRolesMap: Record<string, string> = {
+      "technology-transfer": "technology-transfer",
+      "community-service": "community-service",
+      "research-and-publications": "research-and-publications",
+    };
+    const applicableRoles = roleNames
+      .filter(r => consideredRolesMap[r])
+      .map(r => consideredRolesMap[r]);
 
-      const consideredArray = considered
-        .split(",")
-        .map((c: string) => c.trim().toLowerCase());
-
-      return userRoles.some(r => consideredArray.includes(r));
-    });
+    if (applicableRoles.length > 0) {
+      filtered = filtered.filter(fwd =>
+        fwd.submitProposal.notice?.consideredFor
+          ? applicableRoles.includes(fwd.submitProposal.notice.consideredFor)
+          : false
+      );
+    }
 
     // Filter by search
-    const filtered = filteredByRole.filter(fwd =>
-      !search || fwd.submitProposal.title.toLowerCase().includes(search.toLowerCase())
-    );
+    if (search) {
+      filtered = filtered.filter(fwd =>
+        fwd.submitProposal.title.toLowerCase().includes(search.toLowerCase())
+      );
+    }
 
     // Pagination
     const start = (page - 1) * limit;
@@ -98,7 +97,6 @@ export async function GET(req: Request) {
     // Format response
     const proposals = paginated.map(fwd => {
       const p = fwd.submitProposal;
-      const latestVersion = p.versions[0];
       return {
         id: p.id,
         title: p.title,
@@ -108,17 +106,16 @@ export async function GET(req: Request) {
         submittedBy: p.submittedBy.fullName,
         orgUnit: p.orgUnit.name,
         submittedAt: p.createdAt.toISOString(),
-        reviewers: latestVersion?.reviews.map(r => ({
-          reviewerId: r.reviewerId,
-          reviewerName: r.reviewer.fullName,
-          status: r.status,
-          comments: r.comments,
-        })) || [],
+        finalDecision: p.finalDecision
+          ? {
+              status: p.finalDecision.status,
+              reason: p.finalDecision.reason,
+              decidedBy: p.finalDecision.decidedBy.fullName,
+              decidedAt: p.finalDecision.decidedAt.toISOString(),
+            }
+          : null,
         forwardedBy: fwd.forwardedBy.fullName,
         forwardedAt: fwd.forwardedAt.toISOString(),
-        status: fwd.status,
-        remarks: fwd.remarks,
-        consideredFor: p.notice?.consideredFor || null,
       };
     });
 
@@ -127,9 +124,9 @@ export async function GET(req: Request) {
       total: filtered.length,
     });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Error in finalized proposals API:", err);
     return NextResponse.json(
-      { error: "Failed to fetch proposals" },
+      { error: "Failed to fetch finalized proposals" },
       { status: 500 }
     );
   }

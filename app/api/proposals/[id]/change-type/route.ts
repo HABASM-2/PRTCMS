@@ -29,9 +29,7 @@ export async function POST(
         versions: {
           orderBy: { versionNumber: "desc" },
           take: 1,
-          include: {
-            reviews: { select: { reviewerId: true } },
-          },
+          include: { reviews: true },
         },
       },
     });
@@ -61,9 +59,9 @@ export async function POST(
     const oldReviewerIds = lastVersion.reviews.map((r) => r.reviewerId);
     const allReviewerIds = Array.from(new Set([...oldReviewerIds, currentUserId]));
 
-    // Create ProposalReview for any missing reviewers (skip if already exists)
     for (const reviewerId of allReviewerIds) {
-      const existingReview = await prisma.proposalReview.findUnique({
+      // Find existing ProposalReview
+      let review = await prisma.proposalReview.findUnique({
         where: {
           proposalVersionId_reviewerId: {
             proposalVersionId: lastVersion.id,
@@ -72,34 +70,46 @@ export async function POST(
         },
       });
 
-      if (!existingReview) {
-        const review = await prisma.proposalReview.create({
+      if (!review) {
+        // Create new review
+        review = await prisma.proposalReview.create({
           data: {
             proposalVersionId: lastVersion.id,
             reviewerId,
             status: reviewerId === currentUserId ? "NEEDS_MODIFICATION" : "PENDING",
           },
         });
+      } else if (reviewerId === currentUserId) {
+        // Update existing review for current user
+        review = await prisma.proposalReview.update({
+          where: {
+            proposalVersionId_reviewerId: {
+              proposalVersionId: lastVersion.id,
+              reviewerId,
+            },
+          },
+          data: { status: "NEEDS_MODIFICATION" },
+        });
+      }
 
-        // Add system comment only for current user
-        if (reviewerId === currentUserId) {
+      // Insert system comment and optional user comment only for current user
+      if (reviewerId === currentUserId) {
+        await prisma.proposalReviewComment.create({
+          data: {
+            proposalReviewId: review.id,
+            authorId: currentUserId,
+            content: "[SYSTEM] Changed from Concept Note to Proposal",
+          },
+        });
+
+        if (comment?.trim()) {
           await prisma.proposalReviewComment.create({
             data: {
               proposalReviewId: review.id,
               authorId: currentUserId,
-              content: "[SYSTEM] Changed from Concept Note to Proposal",
+              content: comment.trim(),
             },
           });
-
-          if (comment?.trim()) {
-            await prisma.proposalReviewComment.create({
-              data: {
-                proposalReviewId: review.id,
-                authorId: currentUserId,
-                content: comment.trim(),
-              },
-            });
-          }
         }
       }
     }
