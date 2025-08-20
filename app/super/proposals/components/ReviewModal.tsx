@@ -35,6 +35,7 @@ interface Version {
   fileUrl?: string;
   versionNumber: number;
   createdAt: string;
+  type: string;
 }
 
 interface Proposal {
@@ -123,6 +124,10 @@ export default function ReviewModal({
 }: Props) {
   const selectedVersion =
     selectedProposal?.versions.find((v) => v.id === selectedVersionId) ?? null;
+  const lastVersion =
+    selectedProposal?.versions[selectedProposal?.versions.length - 1];
+
+  const lastVersionType = lastVersion?.type;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -208,14 +213,16 @@ export default function ReviewModal({
                 <h4 className="font-semibold mb-2">Your Review</h4>
                 {!existingReview && (
                   <p className="italic text-gray-500 dark:text-gray-400">
+                    You are going to review:{" "}
+                    {getNoticeTypeLabel(selectedVersion?.type)}
                     You have not reviewed this version yet.
                   </p>
                 )}
                 {existingReview && (
                   <div className="p-3 rounded mb-3 border border-blue-500 bg-blue-50 dark:bg-blue-900">
                     <div className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-300 px-1">
-                      Latest review type:{" "}
-                      {getNoticeTypeLabel(selectedProposal.noticeType)}
+                      Review started as:{" "}
+                      {getNoticeTypeLabel(selectedVersion?.type)}
                     </div>
                     <p>
                       <strong>Reviewer:</strong> {existingReview.reviewerName}
@@ -264,6 +271,7 @@ export default function ReviewModal({
                   </Select>
                 </div>
 
+                {/* Comments Section */}
                 <div className="mt-6">
                   <h4 className="font-semibold mb-2">Comments</h4>
                   <div className="max-h-48 overflow-y-auto border rounded p-2 space-y-3 bg-gray-50 dark:bg-gray-900">
@@ -295,12 +303,13 @@ export default function ReviewModal({
                               onChange={(e) =>
                                 setEditingContent(e.target.value)
                               }
-                              disabled={resubmitAllowed}
+                              disabled={isFinalized || resubmitAllowed}
                             />
                             <div className="mt-1 space-x-2">
                               <button
-                                className="text-blue-600 hover:underline"
+                                className="text-blue-600 hover:underline disabled:opacity-50"
                                 onClick={handleEditComment}
+                                disabled={isFinalized || resubmitAllowed}
                               >
                                 Save
                               </button>
@@ -310,6 +319,7 @@ export default function ReviewModal({
                                   setEditingCommentId(null);
                                   setEditingContent("");
                                 }}
+                                disabled={isFinalized || resubmitAllowed}
                               >
                                 Cancel
                               </button>
@@ -318,25 +328,29 @@ export default function ReviewModal({
                         ) : (
                           <>
                             <p className="whitespace-pre-wrap">{c.content}</p>
-                            {c.authorId === userId && !resubmitAllowed && (
-                              <div className="mt-1 space-x-2 text-xs text-gray-600 dark:text-gray-400">
-                                <button
-                                  onClick={() => {
-                                    setEditingCommentId(c.id);
-                                    setEditingContent(c.content); // pre-fill edit box
-                                  }}
-                                  className="hover:underline"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteComment(c.id)}
-                                  className="hover:underline text-red-600"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            )}
+                            {c.authorId === userId &&
+                              !isFinalized &&
+                              !resubmitAllowed && (
+                                <div className="mt-1 space-x-2 text-xs text-gray-600 dark:text-gray-400">
+                                  <button
+                                    onClick={() => {
+                                      setEditingCommentId(c.id);
+                                      setEditingContent(c.content);
+                                    }}
+                                    className="hover:underline disabled:opacity-50"
+                                    disabled={isFinalized || resubmitAllowed}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteComment(c.id)}
+                                    className="hover:underline text-red-600 disabled:opacity-50"
+                                    disabled={isFinalized || resubmitAllowed}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
                           </>
                         )}
                       </div>
@@ -349,10 +363,13 @@ export default function ReviewModal({
                     placeholder="Add a comment..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
+                    disabled={isFinalized || resubmitAllowed}
                   />
                   <button
                     onClick={handleAddComment}
-                    disabled={resubmitAllowed || !newComment.trim()}
+                    disabled={
+                      isFinalized || resubmitAllowed || !newComment.trim()
+                    }
                     className="mt-2 px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-400"
                   >
                     Add Comment

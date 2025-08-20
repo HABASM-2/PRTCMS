@@ -6,6 +6,7 @@ import ViewProposals from "./ViewProposals";
 import StatusProposals from "./StatusProposals";
 import ReviewProposals from "./ReviewProposals";
 import FinalizedProposals from "./FinalizedProposals"; // <-- New component
+import GrantingProposal from "./GrantingProposal"; // <-- New component
 import { auth } from "@/lib/auth";
 
 export default async function TabsContainer() {
@@ -21,6 +22,7 @@ export default async function TabsContainer() {
   const canViewStatus = roleNames.includes("coordinator"); // Status tab
   const canViewProposal = roleNames.includes("head");
   const canViewFinalized = roleNames.includes("coordinator"); // Only coordinators can see finalized proposals
+  const canViewGoN = roleNames.includes("director");
 
   // Default tab logic
   let defaultTab = "view";
@@ -40,6 +42,7 @@ export default async function TabsContainer() {
         {canViewFinalized && (
           <TabsTrigger value="finalized">Finalized</TabsTrigger>
         )}
+        {canViewGoN && <TabsTrigger value="granting">Granter</TabsTrigger>}
         <TabsTrigger value="review">Review Proposals</TabsTrigger>
       </TabsList>
 
@@ -75,6 +78,12 @@ export default async function TabsContainer() {
       {canViewFinalized && (
         <TabsContent value="finalized">
           <FinalizedProposals userId={Number(userId)} roles={roles} />
+        </TabsContent>
+      )}
+
+      {canViewGoN && (
+        <TabsContent value="granting">
+          <GrantingProposal userId={Number(userId)} roles={roles} />
         </TabsContent>
       )}
 

@@ -60,6 +60,7 @@ export async function GET(request: Request) {
         title: v.title,
         description: v.description,
         participants: v.participants,
+        type: v.type,
         fileUrl: v.fileUrl,
         createdAt: v.createdAt.toISOString(),
         resubmitAllowed: v.resubmitAllowed,

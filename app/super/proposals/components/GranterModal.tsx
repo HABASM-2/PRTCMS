@@ -259,7 +259,7 @@ export default function ProposalDetailsModal({
                     </div>
 
                     {/* Resubmit Checkbox */}
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    {/* <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={version.resubmitAllowed || false}
@@ -271,7 +271,7 @@ export default function ProposalDetailsModal({
                       <span className="text-sm dark:text-gray-300">
                         Allow resubmission
                       </span>
-                    </label>
+                    </label> */}
 
                     {/* Reviews / Comments with Status */}
                     {version.reviews?.length > 0 && (
