@@ -7,6 +7,7 @@ import StatusProposals from "./StatusProposals";
 import ReviewProposals from "./ReviewProposals";
 import FinalizedProposals from "./FinalizedProposals"; // <-- New component
 import GrantingProposal from "./GrantingProposal"; // <-- New component
+import CommitteeManager from "./CommitteeManager"; // <-- New import
 import { auth } from "@/lib/auth";
 
 export default async function TabsContainer() {
@@ -23,6 +24,7 @@ export default async function TabsContainer() {
   const canViewProposal = roleNames.includes("head");
   const canViewFinalized = roleNames.includes("coordinator"); // Only coordinators can see finalized proposals
   const canViewGoN = roleNames.includes("director");
+  const canManageCommittee = roleNames.includes("director"); // ✅ director only
 
   // Default tab logic
   let defaultTab = "view";
@@ -43,6 +45,9 @@ export default async function TabsContainer() {
           <TabsTrigger value="finalized">Finalized</TabsTrigger>
         )}
         {canViewGoN && <TabsTrigger value="granting">Granter</TabsTrigger>}
+        {canManageCommittee && (
+          <TabsTrigger value="committee">Committee</TabsTrigger>
+        )}
         <TabsTrigger value="review">Review Proposals</TabsTrigger>
       </TabsList>
 
@@ -84,6 +89,12 @@ export default async function TabsContainer() {
       {canViewGoN && (
         <TabsContent value="granting">
           <GrantingProposal userId={Number(userId)} roles={roles} />
+        </TabsContent>
+      )}
+
+      {canManageCommittee && (
+        <TabsContent value="committee">
+          <CommitteeManager userId={Number(userId)} />
         </TabsContent>
       )}
 

@@ -20,7 +20,8 @@ model Organisation {
   createdAt    DateTime      @default(now())
   activityLogs ActivityLog[]
 
-  users User[] @relation("UserOrganisations") // Users assigned to organisation
+  users            User[]             @relation("UserOrganisations") // Users assigned to organisation
+  CentralCommittee CentralCommittee[]
 }
 
 // ------------------- User -------------------
@@ -56,7 +57,11 @@ model User {
   receivedNotices  ProposalNoticeForward[] @relation("UserReceived")
 
   // Relation for ProposalForwarding (as forwarder)
-  forwardedProposals ProposalForwarding[] @relation("ProposalForwardedBy")
+  forwardedProposals     ProposalForwarding[]     @relation("ProposalForwardedBy")
+  CentralCommittee       CentralCommittee[]
+  CentralCommitteeMember CentralCommitteeMember[]
+  CommitteeDecision      CommitteeDecision[]
+  CommitteeMessage       CommitteeMessage[]
 }
 
 // ------------------- ActivityLog -------------------
@@ -205,6 +210,7 @@ model SubmitProposal {
   versions           ProposalVersion[]
   finalDecision      FinalDecision?
   ProposalForwarding ProposalForwarding[]
+  CommitteeDecision  CommitteeDecision[]
 
   @@unique([submittedById, noticeId])
   @@index([submittedById])
@@ -311,6 +317,68 @@ model ProposalReviewComment {
 
   @@index([proposalReviewId])
   @@index([authorId])
+}
+
+// ------------------- Central Committee -------------------
+model CentralCommittee {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdById Int
+  createdAt   DateTime @default(now())
+
+  // Optional link to an organisation (if committees are org-based)
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisationId Int?
+
+  members   CentralCommitteeMember[]
+  decisions CommitteeDecision[]
+  messages  CommitteeMessage[]
+}
+
+model CentralCommitteeMember {
+  committeeId Int
+  userId      Int
+
+  committee CentralCommittee @relation(fields: [committeeId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+
+  role     String   @default("MEMBER") // DIRECTOR, MEMBER, SECRETARY, etc.
+  joinedAt DateTime @default(now())
+
+  @@id([committeeId, userId])
+}
+
+model CommitteeDecision {
+  id          Int              @id @default(autoincrement())
+  committee   CentralCommittee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  committeeId Int
+
+  // Decision is tied to a proposal (can extend later for notices too)
+  proposal   SubmitProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalId Int
+
+  decidedBy   User @relation(fields: [decidedById], references: [id])
+  decidedById Int
+
+  decision  ReviewStatus
+  remarks   String?
+  decidedAt DateTime     @default(now())
+
+  @@index([committeeId])
+  @@index([proposalId])
+}
+
+model CommitteeMessage {
+  id                 Int               @id @default(autoincrement())
+  proposalId         Int?
+  senderId           Int?
+  sender             User?             @relation(fields: [senderId], references: [id])
+  content            String
+  createdAt          DateTime          @default(now())
+  CentralCommittee   CentralCommittee? @relation(fields: [centralCommitteeId], references: [id])
+  centralCommitteeId Int?
 }
 
 // ------------------- Enums -------------------

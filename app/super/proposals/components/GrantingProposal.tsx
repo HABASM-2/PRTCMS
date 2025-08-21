@@ -11,8 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Eye } from "lucide-react";
+import { Loader2, Eye, MessageCircle } from "lucide-react";
 import GranterModal from "./GranterModal";
+import ProposalChatSidePanel from "./ProposalChatSidePanel";
 
 function debounce<F extends (...args: any[]) => void>(
   func: F,
@@ -37,11 +38,15 @@ export default function FinalizedProposals({ userId, roles }: Props) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Modal state
+  // Granter modal state
   const [open, setOpen] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<any | null>(null);
 
+  // Chat side panel state
+  const [chatProposalId, setChatProposalId] = useState<number | null>(null);
+
   const limit = 10;
+
   const fetchProposals = useCallback(async () => {
     setLoading(true);
     try {
@@ -105,7 +110,7 @@ export default function FinalizedProposals({ userId, roles }: Props) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
       {/* Search */}
       <Input
         placeholder="Search finalized proposals..."
@@ -116,7 +121,7 @@ export default function FinalizedProposals({ userId, roles }: Props) {
       {/* Loading spinner */}
       {loading && (
         <div className="flex justify-center py-10">
-          <Loader2 className="animate-spin h-10 w-10 text-gray-500" />
+          <Loader2 className="animate-spin h-10 w-10 text-gray-500 dark:text-gray-400" />
         </div>
       )}
 
@@ -150,13 +155,23 @@ export default function FinalizedProposals({ userId, roles }: Props) {
                   {new Date(p.submittedAt).toLocaleDateString()}
                 </TableCell>
                 <TableCell>{p.consideredFor || "-"}</TableCell>
-                <TableCell>
+                <TableCell className="flex gap-2">
+                  {/* View Proposal */}
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => openModal(p.id)}
                   >
                     <Eye className="h-5 w-5" />
+                  </Button>
+
+                  {/* Open Chat Side Panel */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setChatProposalId(p.id)}
+                  >
+                    <MessageCircle className="h-5 w-5" />
                   </Button>
                 </TableCell>
               </TableRow>
@@ -184,13 +199,22 @@ export default function FinalizedProposals({ userId, roles }: Props) {
         </Button>
       </div>
 
-      {/* Modal */}
+      {/* Granter Modal */}
       <GranterModal
         open={open}
         onOpenChange={setOpen}
         proposal={selectedProposal}
         refreshProposal={openModal}
       />
+
+      {/* Chat Side Panel */}
+      {chatProposalId && (
+        <ProposalChatSidePanel
+          proposalId={chatProposalId}
+          currentUserId={userId}
+          onClose={() => setChatProposalId(null)}
+        />
+      )}
     </div>
   );
 }
