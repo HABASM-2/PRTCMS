@@ -28,13 +28,19 @@ export async function GET(req: Request) {
     }
 
     // Get all role names in lowercase
-    const userRoleNames = user.roles.map(r => r.name.toLowerCase());
+    const userRoleNames = user.roles.map((r) => r.name.toLowerCase());
 
     // Map allowed consideredFor values
-    const allowedConsideredFor = ["technology-transfer", "community-service", "research-and-publications"];
+    const allowedConsideredFor = [
+      "technology-transfer",
+      "community-service",
+      "research-and-publications",
+    ];
 
     // Intersect user roles with allowed consideredFor
-    const userConsideredForRoles = userRoleNames.filter(r => allowedConsideredFor.includes(r));
+    const userConsideredForRoles = userRoleNames.filter((r) =>
+      allowedConsideredFor.includes(r)
+    );
 
     if (userConsideredForRoles.length === 0) {
       return NextResponse.json({ proposals: [], total: 0 });
@@ -49,15 +55,20 @@ export async function GET(req: Request) {
       include: {
         submittedBy: { select: { fullName: true } },
         orgUnit: { select: { name: true } },
-        finalDecision: { include: { decidedBy: { select: { fullName: true } } } },
+        finalDecision: {
+          include: { decidedBy: { select: { fullName: true } } },
+        },
         notice: { select: { consideredFor: true } },
+        DirectorApproval: {
+          include: { director: { select: { fullName: true } } },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
 
     // Filter by search
     if (search) {
-      proposalsRaw = proposalsRaw.filter(p =>
+      proposalsRaw = proposalsRaw.filter((p) =>
         p.title.toLowerCase().includes(search.toLowerCase())
       );
     }
@@ -68,7 +79,7 @@ export async function GET(req: Request) {
     const paginated = proposalsRaw.slice(start, end);
 
     // Format response
-    const proposals = paginated.map(p => ({
+    const proposals = paginated.map((p) => ({
       id: p.id,
       title: p.title,
       description: p.description,
@@ -85,6 +96,16 @@ export async function GET(req: Request) {
             decidedAt: p.finalDecision.decidedAt.toISOString(),
           }
         : null,
+      directorApprovals: p.DirectorApproval.map((d) => ({
+        id: d.id,
+        status: d.status,
+        reason: d.reason,
+        considerations: d.considerations,
+        signedFileUrl: d.signedFileUrl,
+        director: d.director.fullName,
+        approvedAt: d.approvedAt ? d.approvedAt.toISOString() : null,
+        createdAt: d.createdAt.toISOString(),
+      })),
       consideredFor: p.notice?.consideredFor ?? null,
     }));
 

@@ -1,4 +1,3 @@
-// /app/api/central-committee/chat/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -27,17 +26,21 @@ export async function GET(req: Request) {
   }
 }
 
-// POST: send a new message
+// POST: send a new message with optional fileURL
 export async function POST(req: Request) {
   try {
-    const { proposalId, senderId, content } = await req.json();
+    const { proposalId, senderId, content, fileURL } = await req.json();
 
-    if (!proposalId || !senderId || !content) {
+    if (!proposalId || !senderId) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
+    if (!content && !fileURL) {
+      return NextResponse.json({ error: "Message must have content or file" }, { status: 400 });
+    }
+
     const message = await prisma.committeeMessage.create({
-      data: { proposalId, senderId, content },
+      data: { proposalId, senderId, content, fileURL },
       include: { sender: { select: { id: true, fullName: true } } },
     });
 
@@ -45,57 +48,5 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("POST chat message error:", err);
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
-  }
-}
-
-// PUT: edit an existing message
-export async function PUT(req: Request) {
-  try {
-    const url = new URL(req.url);
-    const messageId = url.pathname.split("/").pop();
-    const { content, senderId } = await req.json();
-
-    if (!messageId || !content || !senderId) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
-    }
-
-    const message = await prisma.committeeMessage.findUnique({ where: { id: Number(messageId) } });
-    if (!message) return NextResponse.json({ error: "Message not found" }, { status: 404 });
-    if (message.senderId !== senderId) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-
-    const updated = await prisma.committeeMessage.update({
-      where: { id: Number(messageId) },
-      data: { content },
-      include: { sender: { select: { id: true, fullName: true } } },
-    });
-
-    return NextResponse.json({ message: updated });
-  } catch (err) {
-    console.error("PUT chat message error:", err);
-    return NextResponse.json({ error: "Failed to update message" }, { status: 500 });
-  }
-}
-
-// DELETE: remove a message
-export async function DELETE(req: Request) {
-  try {
-    const url = new URL(req.url);
-    const messageId = url.pathname.split("/").pop();
-    const { senderId } = await req.json();
-
-    if (!messageId || !senderId) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
-    }
-
-    const message = await prisma.committeeMessage.findUnique({ where: { id: Number(messageId) } });
-    if (!message) return NextResponse.json({ error: "Message not found" }, { status: 404 });
-    if (message.senderId !== senderId) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-
-    await prisma.committeeMessage.delete({ where: { id: Number(messageId) } });
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("DELETE chat message error:", err);
-    return NextResponse.json({ error: "Failed to delete message" }, { status: 500 });
   }
 }

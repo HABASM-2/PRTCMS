@@ -11,9 +11,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Eye, MessageCircle } from "lucide-react";
+import { Loader2, Eye, MessageCircle, FileText } from "lucide-react";
 import GranterModal from "./GranterModal";
 import ProposalChatSidePanel from "./ProposalChatSidePanel";
+import DirectorApprovalModal from "./DirectorApprovalModal";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function debounce<F extends (...args: any[]) => void>(
   func: F,
@@ -45,8 +52,18 @@ export default function FinalizedProposals({ userId, roles }: Props) {
   // Chat side panel state
   const [chatProposalId, setChatProposalId] = useState<number | null>(null);
 
+  // Director Approval modal state
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [selectedApprovalProposal, setSelectedApprovalProposal] = useState<any>(
+    []
+  );
+  const [approvalProposalId, setApprovalProposalId] = useState<number | null>(
+    null
+  );
+
   const limit = 10;
 
+  // -------------------- Fetch proposals --------------------
   const fetchProposals = useCallback(async () => {
     setLoading(true);
     try {
@@ -77,6 +94,37 @@ export default function FinalizedProposals({ userId, roles }: Props) {
     fetchProposals();
   }, [fetchProposals]);
 
+  // -------------------- Granter modal --------------------
+  const openModal = async (proposalId: number) => {
+    setOpen(true);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/versions`);
+      const data = await res.json();
+      setSelectedProposal(data);
+    } catch (err) {
+      console.error("Error fetching proposal versions", err);
+    }
+  };
+
+  // -------------------- Director Approval --------------------
+  const fetchDirectorApprovals = async (proposalId: number) => {
+    try {
+      const res = await fetch(
+        `/api/proposals/${proposalId}/director-approvals`
+      );
+      const data = await res.json();
+      setSelectedApprovalProposal(data);
+    } catch (err) {
+      console.error("Error fetching director approvals", err);
+    }
+  };
+
+  const openDirectorApprovalModal = (proposalId: number) => {
+    setApprovalOpen(true);
+    setApprovalProposalId(proposalId);
+    fetchDirectorApprovals(proposalId);
+  };
+
   function statusIcon(status: string) {
     switch (status) {
       case "PENDING":
@@ -98,34 +146,20 @@ export default function FinalizedProposals({ userId, roles }: Props) {
     }
   }
 
-  const openModal = async (proposalId: number) => {
-    setOpen(true);
-    try {
-      const res = await fetch(`/api/proposals/${proposalId}/versions`);
-      const data = await res.json();
-      setSelectedProposal(data);
-    } catch (err) {
-      console.error("Error fetching proposal versions", err);
-    }
-  };
-
   return (
     <div className="space-y-4 relative">
-      {/* Search */}
       <Input
         placeholder="Search finalized proposals..."
         onChange={(e) => debouncedSetSearch(e.target.value)}
         className="max-w-sm"
       />
 
-      {/* Loading spinner */}
       {loading && (
         <div className="flex justify-center py-10">
           <Loader2 className="animate-spin h-10 w-10 text-gray-500 dark:text-gray-400" />
         </div>
       )}
 
-      {/* Proposals Table */}
       {!loading && proposals.length > 0 && (
         <Table>
           <TableHeader>
@@ -133,7 +167,8 @@ export default function FinalizedProposals({ userId, roles }: Props) {
               <TableHead>Title</TableHead>
               <TableHead>Submitted By</TableHead>
               <TableHead>Org Unit</TableHead>
-              <TableHead>Final Decision</TableHead>
+              <TableHead>Coord Decision</TableHead>
+              <TableHead>Director Status</TableHead>
               <TableHead>Submitted At</TableHead>
               <TableHead>Considered For</TableHead>
               <TableHead>Actions</TableHead>
@@ -152,11 +187,47 @@ export default function FinalizedProposals({ userId, roles }: Props) {
                   {p.finalDecision ? statusIcon(p.finalDecision.status) : "-"}
                 </TableCell>
                 <TableCell>
+                  {p.directorApprovals && p.directorApprovals.length > 0 ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center gap-2 cursor-pointer">
+                            {statusIcon(p.directorApprovals[0].status)}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-sm max-w-xs">
+                          <p>
+                            <strong>Status:</strong>{" "}
+                            {p.directorApprovals[0].status}
+                          </p>
+                          <p>
+                            <strong>Reason:</strong>{" "}
+                            {p.directorApprovals[0].reason || "—"}
+                          </p>
+                          <p>
+                            <strong>Director:</strong>{" "}
+                            {p.directorApprovals[0].director}
+                          </p>
+                          <p>
+                            <strong>Approved At:</strong>{" "}
+                            {p.directorApprovals[0].approvedAt
+                              ? new Date(
+                                  p.directorApprovals[0].approvedAt
+                                ).toLocaleString()
+                              : "—"}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    "-"
+                  )}
+                </TableCell>
+                <TableCell>
                   {new Date(p.submittedAt).toLocaleDateString()}
                 </TableCell>
                 <TableCell>{p.consideredFor || "-"}</TableCell>
                 <TableCell className="flex gap-2">
-                  {/* View Proposal */}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -164,14 +235,19 @@ export default function FinalizedProposals({ userId, roles }: Props) {
                   >
                     <Eye className="h-5 w-5" />
                   </Button>
-
-                  {/* Open Chat Side Panel */}
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setChatProposalId(p.id)}
                   >
                     <MessageCircle className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openDirectorApprovalModal(p.id)}
+                  >
+                    <FileText className="h-5 w-5" />
                   </Button>
                 </TableCell>
               </TableRow>
@@ -180,7 +256,6 @@ export default function FinalizedProposals({ userId, roles }: Props) {
         </Table>
       )}
 
-      {/* Pagination */}
       <div className="flex justify-between mt-4">
         <Button
           disabled={page === 1}
@@ -199,7 +274,6 @@ export default function FinalizedProposals({ userId, roles }: Props) {
         </Button>
       </div>
 
-      {/* Granter Modal */}
       <GranterModal
         open={open}
         onOpenChange={setOpen}
@@ -207,7 +281,6 @@ export default function FinalizedProposals({ userId, roles }: Props) {
         refreshProposal={openModal}
       />
 
-      {/* Chat Side Panel */}
       {chatProposalId && (
         <ProposalChatSidePanel
           proposalId={chatProposalId}
@@ -215,6 +288,16 @@ export default function FinalizedProposals({ userId, roles }: Props) {
           onClose={() => setChatProposalId(null)}
         />
       )}
+
+      <DirectorApprovalModal
+        open={approvalOpen}
+        onOpenChange={setApprovalOpen}
+        proposalId={approvalProposalId}
+        approvals={selectedApprovalProposal}
+        refresh={() => {
+          if (approvalProposalId) fetchDirectorApprovals(approvalProposalId);
+        }}
+      />
     </div>
   );
 }

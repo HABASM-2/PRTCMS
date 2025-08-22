@@ -3,7 +3,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Edit2, Trash2, Check, X } from "lucide-react";
+import {
+  Loader2,
+  Edit2,
+  Trash2,
+  Check,
+  X,
+  Paperclip,
+  FileText,
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Props {
@@ -15,6 +23,7 @@ interface Props {
 interface Message {
   id: number;
   content: string;
+  fileURL?: string | null;
   createdAt: string;
   sender: { id: number; fullName: string };
 }
@@ -26,6 +35,7 @@ export default function ProposalChatSidePanel({
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
@@ -44,38 +54,59 @@ export default function ProposalChatSidePanel({
     }
   }, [proposalId]);
 
-  // Polling every 3 seconds
   useEffect(() => {
     fetchMessages();
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
   }, [fetchMessages]);
 
-  // Auto scroll to bottom smoothly
-  useEffect(() => {
+  // Auto scroll to bottom
+  const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
         behavior: "smooth",
       });
     }
-  }, [messages]);
+  };
+
+  useEffect(() => scrollToBottom(), [messages]);
 
   // Send new message
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !file) return;
+
     setLoading(true);
+    let fileURL: string | undefined;
+
     try {
-      await fetch("/api/central-committee/chat", {
+      if (file) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.url) fileURL = uploadData.url;
+      }
+
+      const res = await fetch("/api/central-committee/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           proposalId,
           senderId: currentUserId,
           content: newMessage,
+          fileURL,
         }),
       });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
       setNewMessage("");
+      setFile(null);
       fetchMessages();
     } catch (err) {
       console.error(err);
@@ -84,11 +115,12 @@ export default function ProposalChatSidePanel({
     }
   };
 
-  // Edit existing message
+  // Edit message
   const saveEdit = async (messageId: number) => {
     if (!editingContent.trim()) return;
+
     try {
-      await fetch(`/api/central-committee/chat/${messageId}`, {
+      const res = await fetch(`/api/central-committee/chat/${messageId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -96,6 +128,9 @@ export default function ProposalChatSidePanel({
           senderId: currentUserId,
         }),
       });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
       setEditingMessageId(null);
       setEditingContent("");
       fetchMessages();
@@ -106,12 +141,17 @@ export default function ProposalChatSidePanel({
 
   // Delete message
   const deleteMessage = async (messageId: number) => {
+    if (!confirm("Are you sure you want to delete this message?")) return;
+
     try {
-      await fetch(`/api/central-committee/chat/${messageId}`, {
+      const res = await fetch(`/api/central-committee/chat/${messageId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ senderId: currentUserId }),
       });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
       fetchMessages();
     } catch (err) {
       console.error(err);
@@ -128,7 +168,7 @@ export default function ProposalChatSidePanel({
         </Button>
       </div>
 
-      {/* Chat Messages */}
+      {/* Messages */}
       <ScrollArea className="flex-1 p-4 space-y-3" ref={scrollRef}>
         {messages.length === 0 ? (
           <p className="text-sm text-muted-foreground">No messages yet</p>
@@ -152,7 +192,6 @@ export default function ProposalChatSidePanel({
                   </p>
                 )}
 
-                {/* Message Content */}
                 {isEditing ? (
                   <div className="flex gap-2">
                     <Input
@@ -168,10 +207,43 @@ export default function ProposalChatSidePanel({
                     </Button>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <>
+                    {msg.content && (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    )}
+
+                    {msg.fileURL && (
+                      <div className="mt-2 flex items-center gap-2">
+                        {/\.(jpg|jpeg|png|gif|webp)$/i.test(msg.fileURL) ? (
+                          <a
+                            href={msg.fileURL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <img
+                              src={msg.fileURL}
+                              alt="uploaded file"
+                              className="max-w-[200px] rounded-lg border border-border"
+                            />
+                          </a>
+                        ) : (
+                          <a
+                            href={msg.fileURL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 bg-white dark:bg-gray-800 px-2 py-1 rounded border"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span className="text-sm truncate max-w-[150px]">
+                              {msg.fileURL.split("/").pop()}
+                            </span>
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* Timestamp */}
                 <span className="text-xs text-muted-foreground absolute bottom-1 right-2">
                   {new Date(msg.createdAt).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -179,7 +251,6 @@ export default function ProposalChatSidePanel({
                   })}
                 </span>
 
-                {/* Edit/Delete buttons */}
                 {isCurrentUser && !isEditing && (
                   <div className="absolute top-1 right-1 flex gap-1 opacity-0 hover:opacity-100 transition-opacity">
                     <Button
@@ -203,16 +274,56 @@ export default function ProposalChatSidePanel({
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-4 border-t border-border flex gap-2">
-        <Input
-          placeholder="Type a message..."
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-        />
-        <Button onClick={sendMessage} disabled={loading}>
-          {loading ? <Loader2 className="animate-spin w-4 h-4" /> : "Send"}
-        </Button>
+      <div className="p-4 border-t border-border flex flex-col gap-2">
+        {file && (
+          <div className="flex items-center gap-3 p-2 border rounded-lg bg-gray-50 dark:bg-gray-800">
+            {file.type.startsWith("image/") ? (
+              <img
+                src={URL.createObjectURL(file)}
+                alt="preview"
+                className="w-16 h-16 object-cover rounded"
+              />
+            ) : (
+              <FileText className="w-8 h-8" />
+            )}
+            <div className="flex-1">
+              <p className="text-sm font-medium">{file.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {(file.size / 1024).toFixed(1)} KB
+              </p>
+            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setFile(null)}
+              title="Remove file"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        <div className="flex gap-2 items-center">
+          <label className="cursor-pointer flex items-center gap-1">
+            <Paperclip className="w-5 h-5" />
+            <input
+              type="file"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+          </label>
+
+          <Input
+            placeholder="Type a message..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          />
+
+          <Button onClick={sendMessage} disabled={loading}>
+            {loading ? <Loader2 className="animate-spin w-4 h-4" /> : "Send"}
+          </Button>
+        </div>
       </div>
     </div>
   );

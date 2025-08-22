@@ -62,6 +62,8 @@ model User {
   CentralCommitteeMember CentralCommitteeMember[]
   CommitteeDecision      CommitteeDecision[]
   CommitteeMessage       CommitteeMessage[]
+  DirectorApproval       DirectorApproval[]
+  ProjectTask            ProjectTask[]
 }
 
 // ------------------- ActivityLog -------------------
@@ -211,6 +213,8 @@ model SubmitProposal {
   finalDecision      FinalDecision?
   ProposalForwarding ProposalForwarding[]
   CommitteeDecision  CommitteeDecision[]
+  DirectorApproval   DirectorApproval[]
+  Project            Project?
 
   @@unique([submittedById, noticeId])
   @@index([submittedById])
@@ -376,12 +380,94 @@ model CommitteeMessage {
   senderId           Int?
   sender             User?             @relation(fields: [senderId], references: [id])
   content            String
+  fileURL            String?
   createdAt          DateTime          @default(now())
   CentralCommittee   CentralCommittee? @relation(fields: [centralCommitteeId], references: [id])
   centralCommitteeId Int?
 }
 
+// ------------------- DirectorApproval -------------------
+model DirectorApproval {
+  id               Int            @id @default(autoincrement())
+  submitProposal   SubmitProposal @relation(fields: [submitProposalId], references: [id], onDelete: Cascade)
+  submitProposalId Int
+
+  director   User @relation(fields: [directorId], references: [id])
+  directorId Int
+
+  status         ReviewStatus @default(PENDING)
+  reason         String? // Reason for approval/rejection
+  considerations String? // Optional: other notes or considerations
+  signedFileUrl  String? // Optional uploaded signed document
+
+  approvedAt DateTime? // Date of decision
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([submitProposalId])
+  @@index([directorId])
+}
+
+model Project {
+  id               Int            @id @default(autoincrement())
+  submitProposal   SubmitProposal @relation(fields: [submitProposalId], references: [id], onDelete: Cascade)
+  submitProposalId Int            @unique // one proposal can become one project
+
+  title       String
+  description String?
+  status      ProjectStatus @default(ONGOING)
+  startDate   DateTime      @default(now())
+  endDate     DateTime?
+
+  budgets   ProjectBudget[]
+  tasks     ProjectTask[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model ProjectBudget {
+  id        Int     @id @default(autoincrement())
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId Int
+
+  item        String
+  amount      Float
+  spent       Float    @default(0)
+  allocatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ProjectTask {
+  id        Int     @id @default(autoincrement())
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId Int
+
+  title        String
+  description  String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+  assignedToId Int?
+
+  status    TaskStatus @default(PENDING)
+  dueDate   DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
 // ------------------- Enums -------------------
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+enum ProjectStatus {
+  ONGOING
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
 enum ReviewStatus {
   PENDING
   ACCEPTED
