@@ -418,6 +418,7 @@ model Project {
   status      ProjectStatus @default(ONGOING)
   startDate   DateTime      @default(now())
   endDate     DateTime?
+  totalBudget Float?        @default(0) // <- new field
 
   budgets   ProjectBudget[]
   tasks     ProjectTask[]

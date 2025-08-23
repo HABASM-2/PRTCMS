@@ -11,6 +11,7 @@ import {
   Building,
   Tag,
   Paperclip,
+  FilePenIcon,
 } from "lucide-react";
 
 const navItems = [
@@ -49,6 +50,12 @@ const navItems = [
     name: "Proposals",
     href: "/super/proposals",
     icon: Paperclip,
+    roles: ["user", "manager", "dean", "head", "coordinator", "director"],
+  },
+  {
+    name: "Manage",
+    href: "/super/manage",
+    icon: FilePenIcon,
     roles: ["user", "manager", "dean", "head", "coordinator", "director"],
   },
   {

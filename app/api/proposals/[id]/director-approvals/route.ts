@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import formidable from "formidable";
 import fs from "fs";
 import path from "path";
 
@@ -10,7 +9,8 @@ interface Params {
   id: string;
 }
 
-export const GET = async (req: Request, { params }: { params: Params }) => {
+// ------------------ GET ------------------
+export const GET = async (req: Request, { params }: { params: { id: string } }) => {
   try {
     const proposalId = parseInt(params.id);
     if (isNaN(proposalId)) {
@@ -27,10 +27,17 @@ export const GET = async (req: Request, { params }: { params: Params }) => {
             email: true,
           },
         },
+        submitProposal: {
+          select: {
+            Project: {
+              select: {
+                totalBudget: true, // <-- include allocated budget
+              },
+            },
+          },
+        },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
     });
 
     const formatted = approvals.map((a) => ({
@@ -44,6 +51,7 @@ export const GET = async (req: Request, { params }: { params: Params }) => {
         name: a.director.fullName,
         email: a.director.email,
       },
+      totalBudget: a.submitProposal?.Project?.totalBudget ?? null, // allocated budget
     }));
 
     return NextResponse.json(formatted);
@@ -53,6 +61,7 @@ export const GET = async (req: Request, { params }: { params: Params }) => {
   }
 };
 
+// ------------------ POST ------------------
 export const POST = async (req: Request, { params }: { params: { id: string } }) => {
   try {
     const proposalId = parseInt(params.id);
@@ -66,15 +75,14 @@ export const POST = async (req: Request, { params }: { params: { id: string } })
     }
     const directorId = Number(session.user.id);
 
-    // Use Web Request API to get form data
     const formData = await req.formData();
     const status = formData.get("status") as
       | "PENDING"
       | "ACCEPTED"
       | "REJECTED"
       | "NEEDS_MODIFICATION";
-
     const reason = (formData.get("reason") as string) || "";
+    const totalBudget = parseFloat(formData.get("totalBudget") as string) || 0;
 
     let signedFileUrl: string | null = null;
     const file = formData.get("file") as File | null;
@@ -126,12 +134,13 @@ export const POST = async (req: Request, { params }: { params: { id: string } })
             submitProposalId: proposal.id,
             title: proposal.title,
             description: proposal.description,
+            totalBudget, // store allocated budget
           },
         });
       }
     }
 
-    return NextResponse.json(approval);
+    return NextResponse.json({ ...approval, totalBudget });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Failed to submit approval" }, { status: 500 });

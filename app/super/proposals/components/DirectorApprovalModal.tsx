@@ -40,6 +40,7 @@ export default function DirectorApprovalModal({
   >("ACCEPTED");
   const [reason, setReason] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [totalBudget, setTotalBudget] = useState<number>(0); // <-- new
   const [loading, setLoading] = useState(false); // For submit
   const [initialLoading, setInitialLoading] = useState(false); // For fetching previous info
 
@@ -55,14 +56,16 @@ export default function DirectorApprovalModal({
         );
         if (!res.ok) throw new Error("Failed to fetch approvals");
         const data = await res.json();
-        // Assuming latest approval exists
+
         if (data && data.length > 0) {
           const latest = data[data.length - 1];
           setStatus(latest.status);
           setReason(latest.reason || "");
+          setTotalBudget(latest.totalBudget || 0); // <-- set budget
         } else {
           setStatus("ACCEPTED");
           setReason("");
+          setTotalBudget(0);
         }
       } catch (err) {
         console.error(err);
@@ -81,6 +84,7 @@ export default function DirectorApprovalModal({
       const formData = new FormData();
       formData.append("status", status);
       formData.append("reason", reason);
+      formData.append("totalBudget", totalBudget.toString()); // <-- append budget
       if (file) formData.append("file", file);
 
       const res = await fetch(
@@ -152,6 +156,20 @@ export default function DirectorApprovalModal({
             />
           </div>
 
+          {/* Budget */}
+          <div>
+            <Label htmlFor="budget">Total Budget</Label>
+            <Input
+              id="budget"
+              type="number"
+              value={totalBudget}
+              min={0}
+              step={0.01}
+              onChange={(e) => setTotalBudget(parseFloat(e.target.value))}
+              disabled={isDisabled}
+            />
+          </div>
+
           {/* File Upload */}
           <div>
             <Label htmlFor="file">Upload File</Label>
@@ -170,7 +188,8 @@ export default function DirectorApprovalModal({
               <ul className="list-disc pl-5">
                 {approvals.map((a) => (
                   <li key={a.id}>
-                    {a.director.name}: {a.status}
+                    {a.director.name}: {a.status}{" "}
+                    {a.totalBudget ? `- Budget: ${a.totalBudget}` : ""}
                   </li>
                 ))}
               </ul>
