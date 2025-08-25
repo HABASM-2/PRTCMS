@@ -27,13 +27,21 @@ const cardColors: Record<Task["status"], string> = {
   COMPLETED: "bg-green-50/80 dark:bg-green-800/60",
 };
 
-export default function ProjectKanban({ projectId }: { projectId: number }) {
+export default function ProjectKanban({
+  projectId,
+  permit,
+}: {
+  projectId: number;
+  permit: string; // "yes" | "not"
+}) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [addingTask, setAddingTask] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+
+  const canEdit = permit === "yes";
 
   useEffect(() => {
     async function fetchTasks() {
@@ -44,10 +52,7 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
         setTasks(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error(err);
-        toast("Operation successful!", {
-          description: "Everything worked as expected.",
-          duration: 6000,
-        });
+        toast.error("Failed to load tasks.");
       } finally {
         setLoading(false);
       }
@@ -59,14 +64,12 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
     msg: string,
     variant: "default" | "destructive" = "default"
   ) => {
-    if (variant === "destructive") {
-      toast.error(msg); // red/error toast
-    } else {
-      toast(msg); // default toast
-    }
+    if (variant === "destructive") toast.error(msg);
+    else toast(msg);
   };
 
   const handleAddTask = async () => {
+    if (!canEdit) return;
     const title = newTaskTitle.trim();
     if (!title) return;
 
@@ -93,7 +96,7 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
     e: React.DragEvent<HTMLDivElement>,
     taskId: number
   ) => {
-    if (editingTaskId) return;
+    if (!canEdit || editingTaskId) return;
     e.dataTransfer.setData("taskId", taskId.toString());
   };
 
@@ -101,6 +104,8 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
     e: React.DragEvent<HTMLDivElement>,
     status: Task["status"]
   ) => {
+    if (!canEdit) return;
+
     const taskId = Number(e.dataTransfer.getData("taskId"));
     if (!taskId) return;
 
@@ -128,6 +133,8 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
   };
 
   const handleRename = async (taskId: number) => {
+    if (!canEdit) return;
+
     const newTitle = editingTitle.trim();
     if (!newTitle) return;
 
@@ -156,6 +163,8 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
   };
 
   const handleDelete = async (taskId: number) => {
+    if (!canEdit) return;
+
     const taskToDelete = tasks.find((t) => t.id === taskId);
     if (!taskToDelete) return;
 
@@ -210,9 +219,10 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
                 {tasksByStatus[status].map((task) => (
                   <div
                     key={task.id}
-                    draggable={editingTaskId !== task.id}
+                    draggable={canEdit && editingTaskId !== task.id}
                     onDragStart={(e) => handleDragStart(e, task.id)}
                     onDoubleClick={() => {
+                      if (!canEdit) return;
                       setEditingTaskId(task.id);
                       setEditingTitle(task.title);
                     }}
@@ -257,21 +267,24 @@ export default function ProjectKanban({ projectId }: { projectId: number }) {
                     ) : (
                       <div className="flex-1 flex justify-between items-center">
                         <span>{task.title}</span>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="opacity-0 hover:opacity-100 transition-opacity absolute right-2 top-2"
-                          onClick={() => handleDelete(task.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
+                        {canEdit && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="opacity-0 hover:opacity-100 transition-opacity absolute right-2 top-2"
+                            onClick={() => handleDelete(task.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
                 ))}
               </ScrollArea>
 
-              {status === "PENDING" && (
+              {/* Add task only if editable */}
+              {canEdit && status === "PENDING" && (
                 <div className="p-2 border-t border-gray-200 dark:border-gray-700 flex gap-2 rounded-b-2xl">
                   <Input
                     placeholder="New task"

@@ -220,7 +220,10 @@ export default function ProjectsPage({ userId }: propos) {
                           <TableCell colSpan={9} className="p-0">
                             <div className="flex border-t border-gray-200 dark:border-gray-700">
                               <div className="flex-1 p-2">
-                                <ProjectKanban projectId={project.id} />
+                                <ProjectKanban
+                                  projectId={project.id}
+                                  permit="yes"
+                                />
                               </div>
                               <div className="w-[25%] p-2 border-l border-gray-200 dark:border-gray-700 ml-auto">
                                 <BudgetManager
@@ -234,6 +237,7 @@ export default function ProjectsPage({ userId }: propos) {
                                       totals
                                     )
                                   }
+                                  permit="yes"
                                 />
                               </div>
                             </div>

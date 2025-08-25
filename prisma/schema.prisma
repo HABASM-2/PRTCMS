@@ -56,6 +56,8 @@ model User {
   forwardedNotices ProposalNoticeForward[] @relation("UserForwarded")
   receivedNotices  ProposalNoticeForward[] @relation("UserReceived")
 
+  isApproved Boolean @default(false) // false = not approved, true = approved
+
   // Relation for ProposalForwarding (as forwarder)
   forwardedProposals     ProposalForwarding[]     @relation("ProposalForwardedBy")
   CentralCommittee       CentralCommittee[]

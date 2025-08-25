@@ -30,6 +30,7 @@ interface Props {
   budgets: Budget[];
   allocatedBudget: number;
   onChange?: (updatedBudgets: Budget[], totals: Totals) => void;
+  permit: "yes" | "not"; // only two values
 }
 
 export default function BudgetManager({
@@ -37,6 +38,7 @@ export default function BudgetManager({
   budgets: initialBudgets,
   allocatedBudget,
   onChange,
+  permit,
 }: Props) {
   const [budgets, setBudgets] = useState<Budget[]>(initialBudgets ?? []);
   const [adding, setAdding] = useState(false);
@@ -201,7 +203,7 @@ export default function BudgetManager({
 
           return (
             <div key={b.id} className="flex flex-col p-2 border rounded gap-1">
-              {editing ? (
+              {editing && permit === "yes" ? (
                 <div className="flex gap-2">
                   <Input
                     value={editingItem}
@@ -230,25 +232,28 @@ export default function BudgetManager({
                 <div className="flex justify-between items-center">
                   <span className="truncate">{b.item}</span>
                   <span className="tabular-nums">{amount.toFixed(2)}</span>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setEditingId(b.id);
-                        setEditingItem(b.item ?? "");
-                        setEditingAmount(String(amount));
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDelete(b.id)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
+
+                  {permit === "yes" && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setEditingId(b.id);
+                          setEditingItem(b.item ?? "");
+                          setEditingAmount(String(amount));
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDelete(b.id)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -266,29 +271,31 @@ export default function BudgetManager({
         })}
       </div>
 
-      {/* Add New Budget */}
-      <div className="flex gap-2 mt-2">
-        <Input
-          placeholder="Item"
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          className="flex-1"
-        />
-        <Input
-          placeholder="Amount"
-          type="number"
-          inputMode="decimal"
-          value={newAmount}
-          onChange={(e) => setNewAmount(e.target.value)}
-          className="w-28"
-        />
-        <Button
-          onClick={handleAdd}
-          disabled={adding || !newItem.trim() || newAmount === ""}
-        >
-          {adding ? <Loader2 className="animate-spin w-4 h-4" /> : "Add"}
-        </Button>
-      </div>
+      {/* Add New Budget (only if permit is yes) */}
+      {permit === "yes" && (
+        <div className="flex gap-2 mt-2">
+          <Input
+            placeholder="Item"
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            className="flex-1"
+          />
+          <Input
+            placeholder="Amount"
+            type="number"
+            inputMode="decimal"
+            value={newAmount}
+            onChange={(e) => setNewAmount(e.target.value)}
+            className="w-28"
+          />
+          <Button
+            onClick={handleAdd}
+            disabled={adding || !newItem.trim() || newAmount === ""}
+          >
+            {adding ? <Loader2 className="animate-spin w-4 h-4" /> : "Add"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

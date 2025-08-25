@@ -9,9 +9,9 @@ export async function POST(req: Request) {
     where: { username },
   });
 
-  if (!user || user.role !== "super") {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
+  // if (!user || user.role !== "super") {
+  //   return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  // }
 
   const match = await bcrypt.compare(password, user.password);
 
